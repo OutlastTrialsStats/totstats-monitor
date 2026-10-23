@@ -38,28 +38,13 @@ startup, so a recorded session runs end to end.
 | `--no-install` | Do not copy the executable into `%LOCALAPPDATA%` and relaunch |
 | `--silent` | No console output; this is what the autostart entry uses |
 
-Discord Rich Presence also asks outlasttrialsstats.com for your own live presence every 10 seconds
-(`GET /api/live/presence/{profileId}`), because the game no longer logs it. The first request only
-queues the profile (`202` with `Retry-After`); later ones return the game's raw presence object
-(`200`), whose placeholders (`-1`, `"-"`, `""`) the app turns into nothing. A dry run skips that:
-the live presence has nothing to do with a recorded log. To try it against a local backend, point
-the app at one. The lookup only reads, and a dry run still contributes nothing:
-
-```powershell
-$env:TOTSTATS_API_BASE = "http://localhost:8084/api"
-.venv\Scripts\python -m totstats --dry-run --verbose --logs-dir C:\temp\logs
-```
-
 ## Before opening a pull request
 
 ```powershell
 .venv\Scripts\ruff check .
-.venv\Scripts\python -m pytest
 ```
 
-CI runs the lint and the build job depends on it. The tests in `tests/` cover the presence state
-machine, the log and API parsing, the live poller and the trial catalog, with hand-built log lines
-and responses in `tests/presence_fixtures.py`.
+CI runs the same command and the build job depends on it.
 
 To produce the executable:
 
@@ -85,14 +70,6 @@ src/totstats/
 The rule that keeps this workable: **`shared/` knows nothing about features, and features know
 nothing about each other.** Anything Discord-specific goes in `presence/`, not in `shared/` and
 never in `contribute/`.
-
-Trial, program and difficulty names come from the website's catalog,
-[`frontend/public/data/trials.json`](https://github.com/OutlastTrialsStats/OutlastTrialsStats/blob/main/frontend/public/data/trials.json)
-in the website repository, served as `https://outlasttrialsstats.com/data/trials.json`. The app
-downloads it every 6 hours and ships a copy as `assets/trials.json` for offline use. To add or
-rename a trial, edit it there and copy the file here before a release. Only what Discord needs and
-the website file lacks (role icons, the fallback banner, labels such as "Core Program" or "Blood
-Drive", trial ids the website does not list) lives in `src/totstats/presence/catalog.py`.
 
 `shared/log_tail.py` is the piece to understand first. The game's log is read once, by one
 tailer, and dispatched to subscribers — reading it twice would double the I/O and let two
