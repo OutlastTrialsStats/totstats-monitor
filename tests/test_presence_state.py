@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import pytest
 from presence_fixtures import (
     PROGRAM_CHAIN,
     PROGRAM_HALLOWEEN,
@@ -35,9 +36,6 @@ CATALOG = Catalog(
         "PSB_MT01": TrialInfo("Cancel the Autopsy", location="Police Station"),
     }
 )
-
-
-# --- stale trial (22.10.) -------------------------------------------------------------------
 
 
 def test_the_second_trial_of_a_session_replaces_the_first():
@@ -82,7 +80,6 @@ def test_a_new_trial_descriptor_wins_even_without_a_lobby_in_between():
 
     feeder.feed(stage("2026.10.22-17.27.05:372", PROGRAM_HALLOWEEN, "ORI_MT02", "Unknown"))
     assert feeder.state.trial_id == "ORI_MT02"
-    # Set outright, not kept from the previous trial.
     assert feeder.state.difficulty is None
     assert feeder.state.trial_started_at is None
 
@@ -101,9 +98,6 @@ def test_the_main_menu_clears_everything_about_the_trial():
     assert (state.chain_step, state.invasion_role, state.trial_started_at) == (None, None, None)
 
 
-# --- Escalation -----------------------------------------------------------------------------
-
-
 def test_escalation_steps_come_from_the_sample():
     feeder = Feeder()
     feeder.feed(
@@ -116,7 +110,6 @@ def test_escalation_steps_come_from_the_sample():
     assert feeder.state.activity is Activity.CHAIN
     assert feeder.state.chain_step == 1
 
-    # The next step loads the trial map again and names its trial.
     feeder.feed(
         phase("2026.10.22-18.10.00:000", "StageSuccess", "StageEnding"),
         trial_map("2026.10.22-18.10.30:000"),
@@ -124,14 +117,11 @@ def test_escalation_steps_come_from_the_sample():
     )
     assert feeder.state.activity is Activity.CHAIN
     assert feeder.state.trial_id == "CHA_MT02"
-    # Same program, so the step survives until the sample catches up.
     assert feeder.state.chain_step == 1
 
-    # Still within the grace: the sample may predate the switch.
     feeder.clock.advance(SAMPLE_GRACE / 2)
     assert not feeder.offer(sample(feeder.clock(), "trialchain", "CHA_MT01", PROGRAM_CHAIN, 2, 1))
 
-    # After the grace a lagging sample of the previous step only refines; it never names the trial.
     feeder.clock.advance(AFTER_GRACE)
     feeder.offer(sample(feeder.clock(), "trialchain", "CHA_MT01", PROGRAM_CHAIN, 2, 1))
     assert feeder.state.trial_id == "CHA_MT02"
@@ -158,23 +148,6 @@ def test_a_trial_map_load_does_not_end_a_chain():
     assert feeder.state.chain_step == 3
 
 
-def test_leaving_the_chain_for_another_program_drops_the_step():
-    feeder = Feeder()
-    feeder.feed(
-        trial_map("2026.10.22-18.01.00:000"),
-        stage("2026.10.22-18.01.01:000", PROGRAM_CHAIN, "CHA_MT01"),
-    )
-    feeder.clock.advance(AFTER_GRACE)
-    feeder.offer(sample(feeder.clock(), "trialchain", "CHA_MT01", PROGRAM_CHAIN, 2, 2))
-    assert feeder.state.chain_step == 2
-
-    feeder.feed(stage("2026.10.22-18.20.00:000", PROGRAM_HALLOWEEN, "PSA_MT01"))
-    assert feeder.state.chain_step is None
-
-
-# --- Invasion -------------------------------------------------------------------------------
-
-
 def test_from_invasion_to_a_normal_trial():
     feeder = Feeder()
     feeder.feed(
@@ -196,7 +169,6 @@ def test_from_invasion_to_a_normal_trial():
     assert feeder.state.invasion_role is None
     assert not feeder.state.in_invasion
 
-    # The site still reports the Invasion trial: it describes another program, so it is dropped.
     feeder.clock.advance(AFTER_GRACE)
     assert not feeder.offer(sample(feeder.clock(), "invadingtrial", "PSB_MT01", PROGRAM_INVASION, 3))
     assert feeder.state.invasion_role is None
@@ -207,18 +179,41 @@ def test_from_invasion_to_a_normal_trial():
     assert "Invasion" not in payload.state
 
 
-def test_a_new_program_without_a_lobby_drops_the_role():
+@pytest.mark.parametrize(
+    ("program", "trial", "presence_sample", "field", "value"),
+    [
+        pytest.param(
+            PROGRAM_CHAIN,
+            "CHA_MT01",
+            sample(0.0, "trialchain", "CHA_MT01", PROGRAM_CHAIN, 2, 2),
+            "chain_step",
+            2,
+            id="chain-step",
+        ),
+        pytest.param(
+            PROGRAM_INVASION,
+            "PSB_MT01",
+            sample(0.0, "trial", "PSB_MT01", PROGRAM_INVASION, 2),
+            "invasion_role",
+            InvasionRole.REAGENT,
+            id="invasion-role",
+        ),
+    ],
+)
+def test_a_new_program_without_a_lobby_drops_what_the_old_one_had(
+    program, trial, presence_sample, field, value
+):
     feeder = Feeder()
     feeder.feed(
-        trial_map("2026.10.22-19.01.00:000"),
-        stage("2026.10.22-19.01.01:000", PROGRAM_INVASION, "PSB_MT01"),
+        trial_map("2026.10.22-18.01.00:000"),
+        stage("2026.10.22-18.01.01:000", program, trial),
     )
     feeder.clock.advance(AFTER_GRACE)
-    feeder.offer(sample(feeder.clock(), "trial", "PSB_MT01", PROGRAM_INVASION, 2))
-    assert feeder.state.invasion_role is InvasionRole.REAGENT
+    feeder.offer(replace(presence_sample, received_at=feeder.clock()))
+    assert getattr(feeder.state, field) == value
 
-    feeder.feed(stage("2026.10.22-19.30.00:000", PROGRAM_HALLOWEEN, "PSA_MT01"))
-    assert feeder.state.invasion_role is None
+    feeder.feed(stage("2026.10.22-18.20.00:000", PROGRAM_HALLOWEEN, "PSA_MT01"))
+    assert getattr(feeder.state, field) is None
 
 
 def test_the_role_stays_within_invasion():
@@ -232,9 +227,6 @@ def test_the_role_stays_within_invasion():
 
     feeder.feed(stage("2026.10.22-19.30.00:000", PROGRAM_INVASION, "PSA_MT01"))
     assert feeder.state.invasion_role is InvasionRole.IMPOSTER
-
-
-# --- late samples ---------------------------------------------------------------------------
 
 
 def test_a_late_sample_after_return_to_lobby_changes_nothing():
@@ -256,7 +248,6 @@ def test_a_late_sample_after_return_to_lobby_changes_nothing():
 
     feeder.feed(lobby_map("2026.10.22-17.23.40:033"))
     feeder.clock.advance(AFTER_GRACE)
-    # Back in the Sleep Room a trial sample is from before the map load.
     assert not feeder.offer(sample(feeder.clock(), "trial", "PSA_MT01", PROGRAM_HALLOWEEN, 2))
     assert feeder.state.activity is Activity.SLEEP_ROOM
     assert feeder.state.trial_id is None
@@ -268,7 +259,6 @@ def test_the_grace_counts_from_when_the_sample_was_current():
     event_at = feeder.clock()
 
     feeder.clock.advance(AFTER_GRACE + 4.0)
-    # Arrived after the grace, but a cache in front of the API held it for five seconds.
     assert not feeder.offer(sample(event_at + SAMPLE_GRACE - 1.0, "findingparty"))
     assert feeder.state.activity is Activity.SLEEP_ROOM
 

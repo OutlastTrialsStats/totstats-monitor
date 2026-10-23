@@ -1,151 +1,83 @@
-"""System tray icon. Menu callbacks post onto the UI queue rather than acting directly."""
-
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
-from dataclasses import dataclass
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pystray
 from PIL import Image, ImageDraw
 
 from totstats import APP_NAME
-from totstats.shared import windows
-from totstats.shared.ui_queue import UiQueue
+from totstats.shared import paths, windows
 
-# Sampled from the monogram in icon.ico.
-_BRAND = (203, 202, 153, 255)
+if TYPE_CHECKING:
+    from totstats.app import App
 
-
-@dataclass(frozen=True)
-class TrayCallbacks:
-    open_console: Callable[[], None]
-    uninstall: Callable[[], None]
-    quit: Callable[[], None]
-    status_text: Callable[[], str]
-    # Checkbox state readers. pystray calls these on the tray thread every time the menu is
-    # opened, so they must only read — never touch Tk, never write settings.
-    autostart_enabled: Callable[[], bool]
-    contribute_enabled: Callable[[], bool]
-    presence_enabled: Callable[[], bool]
-    toggle_autostart: Callable[[], None]
-    toggle_contribute: Callable[[], None]
-    toggle_presence: Callable[[], None]
+FALLBACK_COLOR = (203, 202, 153, 255)
 
 
-def load_icon_image(icon_path: Path) -> Image.Image:
-    if icon_path.exists():
-        try:
-            return Image.open(icon_path)
-        except OSError:
-            pass
-    image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-    ImageDraw.Draw(image).rounded_rectangle([4, 4, 60, 60], radius=12, fill=_BRAND)
-    return image
+def _image() -> Image.Image:
+    try:
+        return Image.open(paths.icon_path())
+    except OSError:
+        image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        ImageDraw.Draw(image).rounded_rectangle([4, 4, 60, 60], radius=12, fill=FALLBACK_COLOR)
+        return image
 
 
-class _SizedIcon(pystray.Icon):
-    """Loads the tray icon at the size the notification area actually draws.
-
-    pystray asks LoadImage for LR_DEFAULTSIZE, which resolves to SM_CXICON — the 32px desktop
-    icon, not the 16px SM_CXSMICON the tray uses — and the shell squeezes the result down itself.
-    Handing pystray a smaller image does not help: LR_DEFAULTSIZE scales a 16px source up to 32
-    first. Reading the .ico at the size we want skips both resamples.
-
-    Resolved per call, not once, so WM_DISPLAYCHANGE picks up a new size: pystray re-runs
-    _show(), and with it this method.
-    """
-
-    # Assigned after construction. None falls back to pystray's own loading.
-    _icon_file: Path | None = None
-
+class _Icon(pystray.Icon):
     def _assert_icon_handle(self) -> None:
-        if self._icon_handle:
-            return
-        if self._icon_file is not None:
-            handle = windows.load_icon(self._icon_file, windows.small_icon_size())
-            if handle is not None:
-                self._icon_handle = handle
-                return
-        super()._assert_icon_handle()
+        if not self._icon_handle:
+            self._icon_handle = windows.load_icon(paths.icon_path(), windows.small_icon_size())
+        if not self._icon_handle:
+            super()._assert_icon_handle()
 
 
 class TrayIcon:
-    def __init__(self, ui: UiQueue, callbacks: TrayCallbacks, icon_path: Path) -> None:
-        self._ui = ui
-        self._callbacks = callbacks
-        self._icon = _SizedIcon(
-            APP_NAME,
-            load_icon_image(icon_path),
-            f"{APP_NAME} - {callbacks.status_text()}",
-            self._build_menu(),
-        )
-        self._icon._icon_file = icon_path if icon_path.exists() else None
-
-    def _build_menu(self) -> pystray.Menu:
-        return pystray.Menu(
-            pystray.MenuItem(
-                lambda _item: f"Status: {self._callbacks.status_text()}", None, enabled=False
-            ),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem(
-                "Contribute player data",
-                self._on_toggle_contribute,
-                checked=lambda _item: self._callbacks.contribute_enabled(),
-            ),
-            pystray.MenuItem(
-                "Discord Rich Presence",
-                self._on_toggle_presence,
-                checked=lambda _item: self._callbacks.presence_enabled(),
-            ),
-            pystray.MenuItem(
-                "Start with Windows",
-                self._on_toggle_autostart,
-                checked=lambda _item: self._callbacks.autostart_enabled(),
-            ),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Console", self._on_console),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Uninstall", self._on_uninstall),
-            pystray.MenuItem("Exit", self._on_exit),
-        )
-
-    def _on_console(self, _icon: object, _item: object) -> None:
-        self._ui.post(self._callbacks.open_console)
-
-    def _on_toggle_autostart(self, _icon: object, _item: object) -> None:
-        self._ui.post(self._callbacks.toggle_autostart)
-
-    def _on_toggle_contribute(self, _icon: object, _item: object) -> None:
-        self._ui.post(self._callbacks.toggle_contribute)
-
-    def _on_toggle_presence(self, _icon: object, _item: object) -> None:
-        self._ui.post(self._callbacks.toggle_presence)
-
-    def _on_uninstall(self, _icon: object, _item: object) -> None:
-        self._ui.post(self._callbacks.uninstall)
-
-    def _on_exit(self, _icon: object, _item: object) -> None:
-        self._ui.post(self._callbacks.quit)
+    def __init__(self, app: App) -> None:
+        self._app = app
+        self._icon = _Icon(APP_NAME, _image(), self._title(), self._menu())
 
     def run(self) -> None:
-        """Blocking; call on a dedicated thread."""
         self._icon.run()
 
     def stop(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self._icon.stop()
-        except Exception:  # noqa: BLE001 - shutdown must not fail on a dead message loop
-            pass
 
-    def set_status(self, status: str) -> None:
-        try:
-            self._icon.title = f"{APP_NAME} - {status}"
-        except Exception:  # noqa: BLE001
-            pass
+    def update(self) -> None:
+        with contextlib.suppress(Exception):
+            self._icon.title = self._title()
 
-    def notify(self, message: str, title: str | None = None) -> None:
-        try:
-            self._icon.notify(message, title or APP_NAME)
-        except Exception:  # noqa: BLE001
-            pass
+    def _title(self) -> str:
+        return f"{APP_NAME} - {self._app.status_text()}"
+
+    def _post(self, fn: Callable[[], None]) -> Callable[[object, object], None]:
+        return lambda _icon, _item: self._app.ui.post(fn)
+
+    def _menu(self) -> pystray.Menu:
+        app = self._app
+        return pystray.Menu(
+            pystray.MenuItem(lambda _item: f"Status: {app.status_text()}", None, enabled=False),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem(
+                "Contribute player data",
+                self._post(app.toggle_contribute),
+                checked=lambda _item: app.settings.features.contribute,
+            ),
+            pystray.MenuItem(
+                "Discord Rich Presence",
+                self._post(app.toggle_presence),
+                checked=lambda _item: app.settings.features.presence,
+            ),
+            pystray.MenuItem(
+                "Start with Windows",
+                self._post(app.toggle_autostart),
+                checked=lambda _item: bool(app.settings.autostart),
+            ),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Console", self._post(app.open_console)),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Uninstall", self._post(app.uninstall)),
+            pystray.MenuItem("Exit", self._post(app.quit)),
+        )

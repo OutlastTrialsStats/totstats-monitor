@@ -1,12 +1,6 @@
-"""Hand-built log lines and presence samples for the presence tests.
-
-The log lines follow what the game writes, with addresses, session ids and tokens replaced. The
-sequence in SESSION_2210 is the session from 22.10. that kept showing its first trial.
-"""
-
 from __future__ import annotations
 
-from totstats.presence.parser import PresenceParser, PresenceSample
+from totstats.presence.parser import PresenceSample, parse_event
 from totstats.presence.state import StateMachine
 from totstats.shared.log_tail import LogLine, parse_line
 
@@ -18,8 +12,6 @@ PROGRAM_INVASION = "programINVASION"
 
 
 class FakeClock:
-    """A monotonic clock the test moves by hand."""
-
     def __init__(self, start: float = 1000.0) -> None:
         self.now = start
 
@@ -31,23 +23,17 @@ class FakeClock:
 
 
 class FakeLog:
-    def __init__(self) -> None:
-        self.debugs: list[str] = []
-        self.infos: list[str] = []
-        self.warnings: list[str] = []
-        self.errors: list[str] = []
-
     def debug(self, message: str) -> None:
-        self.debugs.append(message)
+        pass
 
     def info(self, message: str) -> None:
-        self.infos.append(message)
+        pass
 
     def warning(self, message: str) -> None:
-        self.warnings.append(message)
+        pass
 
     def error(self, message: str) -> None:
-        self.errors.append(message)
+        pass
 
 
 def line(ts: str, body: str, replay: bool = False) -> LogLine:
@@ -74,9 +60,7 @@ def trial_map(ts: str) -> LogLine:
     )
 
 
-def stage(
-    ts: str, program: str, trial: str, difficulty: str = "Normal", players: int = 4
-) -> LogLine:
+def stage(ts: str, program: str, trial: str, difficulty: str = "Normal", players: int = 4) -> LogLine:
     return line(
         ts,
         f"RB:  GameStageInfo changed. Program ID: {program}, Trial ID: {trial}, "
@@ -111,18 +95,14 @@ def sample(
         difficulty=difficulty,
         chain_step=chain_step,
         player_count=player_count,
-        invasion_state=None,
         received_at=received_at,
     )
 
 
 class Feeder:
-    """Runs log lines through the real parser into a state machine, the way the service does."""
-
     def __init__(self, clock: FakeClock | None = None) -> None:
         self.clock = clock or FakeClock()
         self.machine = StateMachine(monotonic=self.clock)
-        self._parser = PresenceParser()
 
     @property
     def state(self):
@@ -130,7 +110,7 @@ class Feeder:
 
     def feed(self, *lines: LogLine) -> None:
         for entry in lines:
-            event = self._parser.parse(entry)
+            event = parse_event(entry.raw)
             if event is not None:
                 self.machine.apply(event, entry.ts, live=not entry.replay)
 
@@ -138,8 +118,6 @@ class Feeder:
         return self.machine.apply_sample(presence_sample)
 
 
-# The 22.10. session: a Police Station trial, back to the Sleep Room, then an Orphanage trial on
-# Insane that the old state machine refused to take over.
 SESSION_2210_FIRST_TRIAL = (
     main_menu_map("2026.10.22-17.03.23:957"),
     lobby_map("2026.10.22-17.04.03:073"),

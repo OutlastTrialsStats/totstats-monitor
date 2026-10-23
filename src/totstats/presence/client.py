@@ -1,20 +1,16 @@
-"""The connection to the local Discord client.
-
-Every method is called from the presence worker thread and none of them raise: Discord may be
-closed, restarting, or a version whose library disagrees with ours, and none of that is worth a
-warning in the user's console — let alone taking a thread down in a windowed build.
-"""
-
 from __future__ import annotations
 
+import contextlib
 import time
+from typing import TYPE_CHECKING
 
 from totstats.presence.render import Payload
 from totstats.shared.applog import AppLog
 
-# Reconnect attempts back off to five minutes; Discord is usually just not running.
+if TYPE_CHECKING:
+    from pypresence import Presence
+
 BACKOFF = (5.0, 10.0, 20.0, 40.0, 60.0, 120.0, 300.0)
-CONNECT_TIMEOUT = 5
 
 
 class DiscordClient:
@@ -22,106 +18,80 @@ class DiscordClient:
         self._client_id = client_id
         self._log = log
         self._dry_run = dry_run
-        self._rpc: object | None = None
+        self._rpc: Presence | None = None
         self._attempt = 0
         self._next_attempt = 0.0
         self._announced = False
 
-    @property
-    def configured(self) -> bool:
-        """A dry run has nothing to connect to, so it needs no application id either."""
-        return self._dry_run or bool(self._client_id)
-
-    @property
-    def connected(self) -> bool:
-        return self._dry_run or self._rpc is not None
-
-    def next_attempt_in(self, now: float | None = None) -> float:
-        return max(0.0, self._next_attempt - (now if now is not None else time.monotonic()))
+    def next_attempt_in(self, now: float) -> float:
+        return max(0.0, self._next_attempt - now)
 
     def ensure_connected(self) -> bool:
-        """Connect if it is due. Returns False without blocking when it is not."""
-        if self.connected:
+        if self._dry_run or self._rpc is not None:
             return True
-        if not self.configured:
-            return False
         now = time.monotonic()
         if now < self._next_attempt:
             return False
-        return self._connect(now)
+        try:
+            from pypresence import Presence
+
+            rpc = Presence(self._client_id, connection_timeout=5)
+            rpc.connect()
+        except Exception as exc:
+            self._retry(now)
+            if self._announced:
+                self._log.debug(f"Discord connection failed: {exc}")
+            else:
+                self._announced = True
+                self._log.info("Discord not running, connecting once it starts")
+            return False
+        self._rpc = rpc
+        self._attempt = 0
+        self._announced = False
+        self._log.info("Connected to Discord")
+        return True
 
     def update(self, payload: Payload) -> bool:
         if self._dry_run:
-            self._log.info(f"🧪 Would show: {payload.summary()}")
+            self._log.info(f"Dry run, would show: {payload.summary()}")
             return True
-        rpc = self._rpc
-        if rpc is None:
+        if self._rpc is None:
             return False
         try:
-            rpc.update(**payload.as_kwargs())  # type: ignore[attr-defined]
-        except Exception as exc:  # noqa: BLE001 - the library's failure modes are open-ended
-            self._drop(f"Discord rejected the update ({exc})")
+            self._rpc.update(**payload.as_kwargs())
+        except Exception as exc:
+            self._drop(f"Discord update failed: {exc}")
             return False
-        self._log.info(f"🎮 Discord shows: {payload.summary()}")
+        self._log.info(f"Discord status: {payload.summary()}")
         return True
 
     def clear(self) -> bool:
         if self._dry_run:
-            self._log.info("🧪 Would clear the Discord status")
+            self._log.info("Dry run, would clear the Discord status")
             return True
-        rpc = self._rpc
-        if rpc is None:
+        if self._rpc is None:
             return False
         try:
-            rpc.clear()  # type: ignore[attr-defined]
-        except Exception as exc:  # noqa: BLE001
-            self._drop(f"Could not clear the Discord status ({exc})")
+            self._rpc.clear()
+        except Exception as exc:
+            self._drop(f"Discord clear failed: {exc}")
             return False
-        self._log.debug("🔗 Discord status cleared")
+        self._log.debug("Discord status cleared")
         return True
 
     def close(self) -> None:
         rpc, self._rpc = self._rpc, None
-        if rpc is None:
-            return
-        try:
-            rpc.close()  # type: ignore[attr-defined]
-        except Exception:  # noqa: BLE001 - shutting down must not fail on a dead pipe
-            pass
+        if rpc is not None:
+            with contextlib.suppress(Exception):
+                rpc.close()
 
-    def _connect(self, now: float) -> bool:
-        assert not self._dry_run, "a dry run must never open a connection to Discord"
-        try:
-            from pypresence import Presence
-
-            # Built here, on the worker thread: pypresence drives an asyncio loop and picks one up
-            # from the thread it is constructed on. The short timeout keeps a missing Discord from
-            # parking this thread for half a minute.
-            rpc = Presence(self._client_id, connection_timeout=CONNECT_TIMEOUT)
-            rpc.connect()
-        except Exception as exc:  # noqa: BLE001
-            self._schedule_retry(now)
-            if not self._announced:
-                self._announced = True
-                self._log.info("ℹ️ Discord is not running — Rich Presence connects once it is")
-            else:
-                self._log.debug(f"🔗 Discord connection failed ({exc})")
-            return False
-
-        self._rpc = rpc
-        self._attempt = 0
-        self._announced = False
-        self._log.info("🔗 Connected to Discord")
-        return True
-
-    def _schedule_retry(self, now: float) -> None:
-        delay = BACKOFF[min(self._attempt, len(BACKOFF) - 1)]
+    def _retry(self, now: float) -> None:
+        self._next_attempt = now + BACKOFF[min(self._attempt, len(BACKOFF) - 1)]
         self._attempt += 1
-        self._next_attempt = now + delay
 
     def _drop(self, message: str) -> None:
-        self._log.debug(f"🔗 {message}")
-        self._log.info("🔗 Lost the connection to Discord — reconnecting")
+        self._log.debug(message)
+        self._log.info("Discord connection lost, reconnecting")
         self.close()
         self._attempt = 0
-        self._schedule_retry(time.monotonic())
+        self._retry(time.monotonic())

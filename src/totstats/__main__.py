@@ -1,21 +1,16 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from collections.abc import Sequence
 
 from totstats import APP_NAME, __version__
+from totstats.shared import installer, windows
 
 
-def parse_args(argv: Sequence[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        prog=APP_NAME,
-        description="Companion app for outlasttrialsstats.com.",
-    )
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog=APP_NAME, description="Companion app for outlasttrialsstats.com.")
     parser.add_argument(
-        "--silent",
-        action="store_true",
-        help="run without console output; used by the autostart entry",
+        "--silent", action="store_true", help="run without console output; used by the autostart entry"
     )
     parser.add_argument(
         "--no-install",
@@ -45,17 +40,9 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument("--verbose", action="store_true", help="log at debug level")
     parser.add_argument("--version", action="version", version=f"{APP_NAME} {__version__}")
-    return parser.parse_args(list(argv))
+    args = parser.parse_args(argv)
 
-
-def main(argv: Sequence[str] | None = None) -> int:
-    args = parse_args(sys.argv[1:] if argv is None else argv)
-
-    from totstats.shared import installer, windows
-
-    # Before anything can create a window, otherwise Windows stretches the process' output.
     windows.enable_dpi_awareness()
-
     if not (args.no_install or args.dry_run) and installer.ensure_installed():
         return 0
 

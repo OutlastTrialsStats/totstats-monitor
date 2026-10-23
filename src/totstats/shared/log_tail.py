@@ -1,11 +1,6 @@
-"""Incremental tailing of the game's Unreal Engine log, shared by every feature.
-
-One tailer serves all subscribers so the log is read once, not once per feature.
-"""
-
 from __future__ import annotations
 
-import os
+import contextlib
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -14,286 +9,168 @@ from pathlib import Path
 
 from totstats.shared.applog import AppLog
 
-# [2026.08.02-15.35.43:756][138]RB:  GamePhase changed to ...
-LINE_PREFIX_RE = re.compile(
-    r"^\[(\d{4})\.(\d{2})\.(\d{2})-(\d{2})\.(\d{2})\.(\d{2}):(\d{3})\]\[\s*(\d+)\](.*)$"
-)
-
-_BOM = b"\xef\xbb\xbf"
+LINE_RE = re.compile(r"^\[(\d{4})\.(\d{2})\.(\d{2})-(\d{2})\.(\d{2})\.(\d{2}):(\d{3})\]\[\s*\d+\]")
+PRIMARY = "OPP.log"
+MAX_REPLAY = 16 * 1024 * 1024
+MAX_READ = 4 * 1024 * 1024
+BOM = b"\xef\xbb\xbf"
 
 
 @dataclass(frozen=True)
 class LogLine:
     raw: str
-
-    body: str
-    """The line with the [timestamp][frame] prefix stripped; equals raw when there is none."""
-
     ts: datetime | None
-    """Naive local time from the prefix, or None for header/footer lines."""
-
-    frame: int | None
-
     replay: bool
-    """True while replaying content that existed before the tailer opened the file."""
 
 
 def parse_line(raw: str, replay: bool = False) -> LogLine:
-    match = LINE_PREFIX_RE.match(raw)
-    if match is None:
-        return LogLine(raw=raw, body=raw, ts=None, frame=None, replay=replay)
-
-    year, month, day, hour, minute, second, milli, frame, body = match.groups()
-    try:
-        ts: datetime | None = datetime(
-            int(year), int(month), int(day), int(hour), int(minute), int(second), int(milli) * 1000
-        )
-    except ValueError:
-        ts = None
-    return LogLine(raw=raw, body=body, ts=ts, frame=int(frame), replay=replay)
-
-
-LineSink = Callable[[LogLine], None]
-EventSink = Callable[[], None]
+    match = LINE_RE.match(raw)
+    ts = None
+    if match:
+        year, month, day, hour, minute, second, milli = map(int, match.groups())
+        with contextlib.suppress(ValueError):
+            ts = datetime(year, month, day, hour, minute, second, milli * 1000)
+    return LogLine(raw, ts, replay)
 
 
 @dataclass(frozen=True)
 class _Subscription:
     name: str
-    sink: LineSink
+    sink: Callable[[LogLine], None]
     needles: tuple[str, ...]
-    on_rotate: EventSink | None
-    on_replay_complete: EventSink | None
+    on_rotate: Callable[[], None] | None
+    on_replay_complete: Callable[[], None] | None
 
 
 class LogTailer:
-    """Polls one log file and dispatches new lines to its subscribers.
-
-    Subscriber sinks run on the caller's thread and must not block — they are expected to hand
-    work off to a queue or mailbox. poll() never raises.
-    """
-
-    def __init__(
-        self,
-        logs_dir: Path,
-        primary_name: str = "OPP.log",
-        max_replay_bytes: int = 16 * 1024 * 1024,
-        max_bytes_per_poll: int = 4 * 1024 * 1024,
-        log: AppLog | None = None,
-    ) -> None:
+    def __init__(self, logs_dir: Path, log: AppLog) -> None:
         self._logs_dir = logs_dir
-        self._primary_name = primary_name
-        self._max_replay_bytes = max_replay_bytes
-        self._max_bytes_per_poll = max_bytes_per_poll
         self._log = log
-
         self._subs: list[_Subscription] = []
-        self._union_needles: tuple[str, ...] | None = ()
+        self._needles: tuple[str, ...] = ()
+        self.reset()
 
-        self._path: Path | None = None
+    def subscribe(
+        self,
+        name: str,
+        sink: Callable[[LogLine], None],
+        needles: Sequence[str],
+        on_rotate: Callable[[], None] | None = None,
+        on_replay_complete: Callable[[], None] | None = None,
+    ) -> None:
+        self._subs.append(_Subscription(name, sink, tuple(needles), on_rotate, on_replay_complete))
+        self._needles = tuple(dict.fromkeys(needle for sub in self._subs for needle in sub.needles))
+
+    def reset(self) -> None:
+        self.path: Path | None = None
+        self.replaying = False
         self._identity: tuple[int, int] | None = None
         self._offset = 0
         self._pending = b""
         self._discard_partial = False
         self._replay_until = 0
-        self._replaying = False
-        self._missing_logged = False
+        self._waiting = False
 
-    def subscribe(
-        self,
-        sink: LineSink,
-        needles: Sequence[str] = (),
-        on_rotate: EventSink | None = None,
-        on_replay_complete: EventSink | None = None,
-        name: str = "subscriber",
-    ) -> None:
-        """Register a sink. needles are literal substrings; an empty sequence means every line."""
-        self._subs.append(
-            _Subscription(
-                name=name,
-                sink=sink,
-                needles=tuple(needles),
-                on_rotate=on_rotate,
-                on_replay_complete=on_replay_complete,
-            )
-        )
-        self._recompute_union()
-
-    def _recompute_union(self) -> None:
-        # A subscriber that wants everything disables the cheap global pre-filter.
-        if any(not sub.needles for sub in self._subs):
-            self._union_needles = None
-            return
-        merged: list[str] = []
-        for sub in self._subs:
-            merged.extend(sub.needles)
-        self._union_needles = tuple(dict.fromkeys(merged))
-
-    @property
-    def current_file(self) -> Path | None:
-        return self._path
-
-    @property
-    def replaying(self) -> bool:
-        return self._replaying
-
-    def reset(self) -> None:
-        self._path = None
-        self._identity = None
-        self._offset = 0
-        self._pending = b""
-        self._discard_partial = False
-        self._replay_until = 0
-        self._replaying = False
-        self._missing_logged = False
-
-    close = reset
-
-    def poll(self) -> int:
-        """Read whatever is new and dispatch it. Returns the number of lines dispatched."""
+    def poll(self) -> None:
         try:
-            return self._poll()
+            self._poll()
         except OSError:
-            # The game may rotate, lock or delete the file at any moment. Nothing here is worth
-            # taking the watcher thread down for.
-            return 0
-        except Exception as exc:  # noqa: BLE001 - the watcher thread must survive anything
-            self._warn(f"log tailer error: {exc}")
-            return 0
+            pass
+        except Exception as exc:
+            self._log.warning(f"Log tailer failed: {exc}")
 
-    def _poll(self) -> int:
+    def _poll(self) -> None:
         path = self._select_file()
         if path is None:
-            if not self._missing_logged:
-                self._info(f"waiting for a game log in {self._logs_dir}")
-                self._missing_logged = True
-            return 0
-        self._missing_logged = False
+            if not self._waiting:
+                self._log.info(f"Waiting for a game log in {self._logs_dir}")
+                self._waiting = True
+            return
+        self._waiting = False
 
-        stat = os.stat(path)
+        stat = path.stat()
         identity = (stat.st_ino, stat.st_ctime_ns)
-
-        if self._path != path or self._identity != identity:
-            self._begin_file(path, identity, stat.st_size, rotated=self._path is not None)
-        elif stat.st_size < self._offset:
-            # Same file, fewer bytes: the game truncated it.
-            self._begin_file(path, identity, stat.st_size, rotated=True)
-
-        return self._read_and_dispatch(path)
+        if self.path != path or self._identity != identity or stat.st_size < self._offset:
+            self._begin(path, identity, stat.st_size)
+        self._read(path)
 
     def _select_file(self) -> Path | None:
-        """OPP.log is always the live file; fall back to newest-by-mtime only if it is absent."""
-        primary = self._logs_dir / self._primary_name
+        primary = self._logs_dir / PRIMARY
         try:
             if primary.is_file():
                 return primary
             candidates = [p for p in self._logs_dir.glob("*.log") if p.is_file()]
+            return max(candidates, key=lambda p: p.stat().st_mtime, default=None)
         except OSError:
             return None
-        if not candidates:
-            return None
-        return max(candidates, key=lambda p: p.stat().st_mtime)
 
-    def _begin_file(self, path: Path, identity: tuple[int, int], size: int, rotated: bool) -> None:
-        previous = self._path
-        self._path = path
+    def _begin(self, path: Path, identity: tuple[int, int], size: int) -> None:
+        rotated = self.path is not None
+        self.path = path
         self._identity = identity
         self._pending = b""
-
-        if size > self._max_replay_bytes:
-            self._offset = size - self._max_replay_bytes
-            self._discard_partial = True
-        else:
-            self._offset = 0
-            self._discard_partial = False
-
+        self._offset = max(0, size - MAX_REPLAY)
+        self._discard_partial = self._offset > 0
         self._replay_until = size
-        self._replaying = True
-
-        if rotated and previous is not None:
-            self._info(f"log file rotated, now following {path.name}")
-        else:
-            self._info(f"following log file {path.name}")
+        self.replaying = True
 
         if rotated:
+            self._log.info(f"Log file rotated, following {path.name}")
             for sub in self._subs:
-                self._fire(sub, sub.on_rotate, "on_rotate")
+                if sub.on_rotate is not None:
+                    self._call(sub, sub.on_rotate)
+        else:
+            self._log.info(f"Following log file {path.name}")
 
-    def _read_and_dispatch(self, path: Path) -> int:
+    def _read(self, path: Path) -> None:
         with open(path, "rb") as handle:
             handle.seek(self._offset)
-            chunk = handle.read(self._max_bytes_per_poll)
+            chunk = handle.read(MAX_READ)
 
         if not chunk:
-            if self._replaying:
+            if self.replaying:
                 self._finish_replay()
-            return 0
+            return
 
-        if self._offset == 0 and chunk.startswith(_BOM):
-            chunk = chunk[len(_BOM):]
-            self._offset += len(_BOM)
-
+        if self._offset == 0 and chunk.startswith(BOM):
+            chunk = chunk[len(BOM) :]
+            self._offset += len(BOM)
         self._offset += len(chunk)
         buffer = self._pending + chunk
 
         if self._discard_partial:
-            # We seeked into the middle of a line; everything up to the first newline is the
-            # tail of a line we never saw the start of. Stay in discard mode until one turns up,
-            # otherwise a chunk without any newline would let the fragment through.
             _, found, buffer = buffer.partition(b"\n")
             if not found:
                 self._pending = b""
-                return 0
+                return
             self._discard_partial = False
 
         complete, newline, self._pending = buffer.rpartition(b"\n")
-
-        dispatched = 0
-        if newline and complete:
-            replay = self._replaying
+        if newline:
             for raw in complete.split(b"\n"):
                 line = raw.rstrip(b"\r")
-                if not line:
-                    continue
-                self._dispatch(line.decode("utf-8", "replace"), replay)
-                dispatched += 1
+                if line:
+                    self._dispatch(line.decode("utf-8", "replace"))
 
-        if self._replaying and self._offset >= self._replay_until:
+        if self.replaying and self._offset >= self._replay_until:
             self._finish_replay()
 
-        return dispatched
-
     def _finish_replay(self) -> None:
-        self._replaying = False
+        self.replaying = False
         for sub in self._subs:
-            self._fire(sub, sub.on_replay_complete, "on_replay_complete")
+            if sub.on_replay_complete is not None:
+                self._call(sub, sub.on_replay_complete)
 
-    def _dispatch(self, raw: str, replay: bool) -> None:
-        union = self._union_needles
-        if union is not None and not any(needle in raw for needle in union):
+    def _dispatch(self, raw: str) -> None:
+        if not any(needle in raw for needle in self._needles):
             return
-
-        line = parse_line(raw, replay)
+        line = parse_line(raw, self.replaying)
         for sub in self._subs:
-            if sub.needles and not any(needle in raw for needle in sub.needles):
-                continue
-            try:
-                sub.sink(line)
-            except Exception as exc:  # noqa: BLE001 - one bad sink must not stop the others
-                self._warn(f"subscriber {sub.name} failed: {exc}")
+            if any(needle in raw for needle in sub.needles):
+                self._call(sub, sub.sink, line)
 
-    def _fire(self, sub: _Subscription, hook: EventSink | None, what: str) -> None:
-        if hook is None:
-            return
+    def _call(self, sub: _Subscription, fn: Callable[..., None], *args: object) -> None:
         try:
-            hook()
-        except Exception as exc:  # noqa: BLE001
-            self._warn(f"subscriber {sub.name} {what} failed: {exc}")
-
-    def _info(self, message: str) -> None:
-        if self._log is not None:
-            self._log.info(f"📄 {message}")
-
-    def _warn(self, message: str) -> None:
-        if self._log is not None:
-            self._log.warning(message)
+            fn(*args)
+        except Exception as exc:
+            self._log.warning(f"Log subscriber {sub.name} failed: {exc}")

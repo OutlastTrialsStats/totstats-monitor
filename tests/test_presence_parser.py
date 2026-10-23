@@ -1,8 +1,17 @@
 from __future__ import annotations
 
-from presence_fixtures import line
+import pytest
 
-from totstats.presence.parser import PresenceParser, parse_sample
+from totstats.presence.parser import parse_sample
+
+_FIELDS = {
+    "presenceState": "presence_state",
+    "trialId": "trial_id",
+    "programId": "program_id",
+    "programDifficulty": "difficulty",
+    "trialChain": "chain_step",
+    "playerCount": "player_count",
+}
 
 
 def _body(online=True, **properties):
@@ -31,29 +40,7 @@ def test_a_full_sample():
     assert sample.difficulty == 2
     assert sample.chain_step == 3
     assert sample.player_count == 4
-    assert sample.invasion_state is None
     assert sample.received_at == 12.5
-
-
-def test_placeholders_become_none():
-    sample = parse_sample(
-        _body(
-            presenceState="",
-            trialId="-",
-            programId="-",
-            programDifficulty=-1.0,
-            trialChain=-1.0,
-            playerCount=-1.0,
-        ),
-        received_at=0.0,
-    )
-    assert sample is not None
-    assert sample.presence_state is None
-    assert sample.trial_id is None
-    assert sample.program_id is None
-    assert sample.difficulty is None
-    assert sample.chain_step is None
-    assert sample.player_count is None
 
 
 def test_a_profile_without_presence():
@@ -65,37 +52,41 @@ def test_a_profile_without_presence():
     assert sample.trial_id is None
 
 
-def test_out_of_range_values_degrade_to_none():
-    sample = parse_sample(
-        _body(programDifficulty=9, trialChain=0, playerCount=-1, presenceState=""), received_at=0.0
-    )
+@pytest.mark.parametrize(
+    "properties",
+    [
+        pytest.param(
+            {
+                "presenceState": "",
+                "trialId": "-",
+                "programId": "-",
+                "programDifficulty": -1.0,
+                "trialChain": -1.0,
+                "playerCount": -1.0,
+            },
+            id="placeholders",
+        ),
+        pytest.param({"programDifficulty": 9, "trialChain": 0, "playerCount": -1}, id="out-of-range"),
+        pytest.param(
+            {"programDifficulty": "2", "trialChain": True, "trialId": 7, "playerCount": "4"},
+            id="wrong-types",
+        ),
+        pytest.param(
+            {
+                "programDifficulty": float("nan"),
+                "trialChain": float("inf"),
+                "playerCount": float("-inf"),
+            },
+            id="non-finite",
+        ),
+    ],
+)
+def test_unusable_values_degrade_to_none(properties):
+    sample = parse_sample(_body(**properties), received_at=0.0)
     assert sample is not None
-    assert sample.difficulty is None
-    assert sample.chain_step is None
-    assert sample.player_count is None
-    assert sample.presence_state is None
-
-
-def test_wrong_types_degrade_to_none():
-    sample = parse_sample(
-        _body(programDifficulty="2", trialChain=True, trialId=7, invasionState=["x"]), received_at=0.0
-    )
-    assert sample is not None
-    assert sample.difficulty is None
-    assert sample.chain_step is None
-    assert sample.trial_id is None
-    assert sample.invasion_state is None
-
-
-def test_non_finite_numbers_degrade_to_none():
-    sample = parse_sample(
-        _body(programDifficulty=float("nan"), trialChain=float("inf"), playerCount=float("-inf")),
-        received_at=0.0,
-    )
-    assert sample is not None
-    assert sample.difficulty is None
-    assert sample.chain_step is None
-    assert sample.player_count is None
+    for name, field in _FIELDS.items():
+        if name in properties:
+            assert getattr(sample, field) is None, name
 
 
 def test_a_body_without_online_is_rejected():
@@ -103,13 +94,3 @@ def test_a_body_without_online_is_rejected():
     assert parse_sample({"error": "NOT_FOUND"}, received_at=0.0) is None
     assert parse_sample([], received_at=0.0) is None
     assert parse_sample(None, received_at=0.0) is None
-
-
-def test_the_presence_post_log_line_is_no_longer_read():
-    parser = PresenceParser()
-    raw = (
-        "OnlineCoreHttpLogs: Verbose: Operation FCoreUpdatePresenceOperation(83) request body: "
-        '{"properties":{"presenceState":"trial"}}'
-    )
-    assert parser.parse(line("2026.08.05-12.00.00:000", raw)) is None
-    assert not any("FCoreUpdatePresenceOperation" in needle for needle in PresenceParser.INTERESTS)
