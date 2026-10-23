@@ -1,5 +1,5 @@
-psutil
-requests
-pystray
-Pillow
-pypresence
+psutil==7.2.2
+requests==2.34.2
+pystray==0.19.5
+Pillow==12.3.0
+pypresence==4.6.2
