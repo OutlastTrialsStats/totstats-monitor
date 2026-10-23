@@ -96,7 +96,7 @@ class App:
         self._catalog_sync = (
             None
             if cache_dir is None
-            else CatalogSync(self.presence.set_catalog, self.log, self._stop, cache_dir, catalog)
+            else CatalogSync(self.presence.set_catalog, self.log, self._stop, cache_dir)
         )
 
         self._tailer.subscribe(

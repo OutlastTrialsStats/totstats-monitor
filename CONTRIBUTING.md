@@ -58,8 +58,8 @@ $env:TOTSTATS_API_BASE = "http://localhost:8084/api"
 ```
 
 CI runs the lint and the build job depends on it. The tests in `tests/` cover the presence state
-machine, the log and API parsing and the live poller, with hand-built log lines and responses in
-`tests/presence_fixtures.py`.
+machine, the log and API parsing, the live poller and the trial catalog, with hand-built log lines
+and responses in `tests/presence_fixtures.py`.
 
 To produce the executable:
 
@@ -85,6 +85,14 @@ src/totstats/
 The rule that keeps this workable: **`shared/` knows nothing about features, and features know
 nothing about each other.** Anything Discord-specific goes in `presence/`, not in `shared/` and
 never in `contribute/`.
+
+Trial, program and difficulty names come from the website's catalog,
+[`frontend/public/data/trials.json`](https://github.com/OutlastTrialsStats/OutlastTrialsStats/blob/main/frontend/public/data/trials.json)
+in the website repository, served as `https://outlasttrialsstats.com/data/trials.json`. The app
+downloads it every 6 hours and ships a copy as `assets/trials.json` for offline use. To add or
+rename a trial, edit it there and copy the file here before a release. Only what Discord needs and
+the website file lacks (role icons, the fallback banner, labels such as "Core Program" or "Blood
+Drive", trial ids the website does not list) lives in `src/totstats/presence/catalog.py`.
 
 `shared/log_tail.py` is the piece to understand first. The game's log is read once, by one
 tailer, and dispatched to subscribers — reading it twice would double the I/O and let two

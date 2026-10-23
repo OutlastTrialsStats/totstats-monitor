@@ -1,4 +1,4 @@
-"""Keeps the trial catalog fresh from the repository, in the background.
+"""Keeps the trial catalog fresh from the website, in the background.
 
 The app never waits for this: presence starts on the bundled catalog and swaps to a newer one
 whenever the download succeeds. A user without internet must not see a single warning about it.
@@ -13,13 +13,11 @@ from pathlib import Path
 
 import requests
 
-from totstats.presence.catalog import Catalog, parse_catalog, read_etag, store_cache
+from totstats.presence.catalog import SITE, Catalog, parse_catalog, read_etag, store_cache
 from totstats.shared.api import USER_AGENT
 from totstats.shared.applog import AppLog
 
-CATALOG_URLS = (
-    "https://raw.githubusercontent.com/OutlastTrialsStats/contribute-data/main/assets/trials.json",
-)
+CATALOG_URLS = (f"{SITE}/data/trials.json",)
 
 REFRESH_INTERVAL = 6 * 3600.0
 FIRST_DELAY = 5.0
@@ -30,7 +28,7 @@ STATUS_NOT_MODIFIED = 304
 
 
 class CatalogSync:
-    """Fetches the catalog on its own thread and hands newer revisions to a callback."""
+    """Fetches the catalog on its own thread and hands every new download to a callback."""
 
     def __init__(
         self,
@@ -38,7 +36,6 @@ class CatalogSync:
         log: AppLog,
         stop: threading.Event,
         cache_dir: Path,
-        current: Catalog | None = None,
         urls: Sequence[str] = CATALOG_URLS,
         interval: float = REFRESH_INTERVAL,
         first_delay: float = FIRST_DELAY,
@@ -50,7 +47,6 @@ class CatalogSync:
         self._urls = tuple(urls)
         self._interval = interval
         self._first_delay = first_delay
-        self._revision = current.revision if current is not None else 0
         self._quiet = False
         self._wake = threading.Event()
         self._worker: threading.Thread | None = None
@@ -119,16 +115,7 @@ class CatalogSync:
             self._log.debug("📦 Downloaded trial catalog was not usable")
             return False
 
-        if catalog.revision < self._revision:
-            self._log.debug(f"📦 Ignoring older trial catalog (revision {catalog.revision})")
-            return True
-
         store_cache(self._cache_dir, response.content, response.headers.get("ETag"), self._log)
-        if catalog.revision > self._revision:
-            self._log.info(
-                f"📦 Trial catalog updated: {len(catalog.trials)} trials "
-                f"(revision {catalog.revision})"
-            )
-        self._revision = catalog.revision
+        self._log.info(f"📦 Trial catalog updated: {len(catalog.trials)} trials")
         self._on_catalog(catalog)
         return True

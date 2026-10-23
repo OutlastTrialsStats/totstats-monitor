@@ -71,7 +71,7 @@ the `^` arrow). Right-click it for the menu:
 | **Exit** | Stops the app without uninstalling |
 
 Everything the app keeps lives in `%LOCALAPPDATA%\TOTStatsMonitor\`: `settings.json`, its own
-`monitor.log`, and the cached trial list. Uninstall deletes that folder and the autostart entry
+`monitor.log`, and the trial list cached from outlasttrialsstats.com. Uninstall deletes that folder and the autostart entry
 and leaves nothing else behind.
 
 ## Contributing

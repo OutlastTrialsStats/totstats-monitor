@@ -1,100 +1,552 @@
 {
-  "schema": 1,
-  "revision": 1,
-  "updated": "2026-08-05",
-  "default_banner": "murkoff_logo",
-  "profile_url": "https://outlasttrialsstats.com/profile/{profile_id}",
-  "difficulties": {
-    "1": "Introductory",
-    "2": "Standard",
-    "3": "Intensive",
-    "4": "Psychosurgery"
-  },
-  "programs": {
-    "programCHAIN": "Escalation",
-    "programINVASION": "Invasion",
-    "programCREATOR": "Custom Trial"
-  },
-  "program_prefixes": {
-    "programCore": "Core Program",
-    "programBloodDonations": "Blood Drive"
-  },
-  "invasion_banners": {
-    "reagent": "icon_reagent",
-    "imposter": "icon_invader"
-  },
-  "trials": {
-    "PS_Trial": {"name": "Kill the Snitch", "banner": "photo_PS_Trial", "location": "Police Station"},
-    "PSA_MT01": {"name": "Teach the Police Officer", "banner": "photo_PSA_MT01", "location": "Police Station"},
-    "PSB_MT01": {"name": "Cancel the Autopsy", "banner": "photo_PSB_MT01", "location": "Police Station"},
-    "PSB_MT02": {"name": "Sabotage the Lockdown", "banner": "photo_PSB_MT02", "location": "Police Station"},
-    "PSB_MT03": {"name": "Eliminate the Past", "banner": "photo_PSB_MT03", "location": "Police Station"},
-    "PSO_MT01": {"name": "Release the Prisoners", "banner": "photo_PSO_MT01", "location": "Police Station"},
-    "PSO_MT02": {"name": "Seize the Narcotics", "banner": "photo_PSO_MT02", "location": "Police Station"},
-
-    "FP_Trial": {"name": "Grind the Bad Apples", "banner": "photo_FP_Trial", "location": "Fun Park"},
-    "FPB_MT01": {"name": "Punish the Miscreants", "banner": "photo_FPB_MT01", "location": "Fun Park"},
-    "FPB_MT02": {"name": "Open the Gates", "banner": "photo_FPB_MT02", "location": "Fun Park"},
-    "FPB_MT03": {"name": "Deface the Futtermans", "banner": "photo_FPB_MT03", "location": "Fun Park"},
-    "FPC_MT01": {"name": "Drill the Futterman", "banner": "photo_FPC_MT01", "location": "Fun Park"},
-    "FPC_MT02": {"name": "Redeem Your Freedom", "banner": "photo_FPC_MT02", "location": "Fun Park"},
-    "FPI_MT01": {"name": "Beguile the Children", "banner": "photo_FPI_MT01", "location": "Fun Park"},
-    "FPI_MT02": {"name": "Win the Truth", "banner": "photo_FPI_MT02", "location": "Fun Park"},
-
-    "OR_Trial": {"name": "Cleanse the Orphans", "banner": "photo_OR_Trial", "location": "Orphanage"},
-    "ORI_MT01": {"name": "Gather the Children of God", "banner": "photo_ORI_MT01", "location": "Orphanage"},
-    "ORS_MT01": {"name": "Feed the Children", "banner": "photo_ORS_MT01", "location": "Orphanage"},
-    "ORS_MT02": {"name": "Foster the Orphans", "banner": "photo_ORS_MT02", "location": "Orphanage"},
-    "ORS_MT03": {"name": "Reunite the Family", "banner": "photo_ORS_MT03", "location": "Orphanage"},
-
-    "CH_Trial": {"name": "Vindicate the Guilty", "banner": "photo_CH_Trial", "location": "Courthouse"},
-    "CHA_MT01": {"name": "Escape the Courthouse", "banner": "photo_CHA_MT01", "location": "Courthouse"},
-    "CHA_MT02": {"name": "Destroy the Evidence", "banner": "photo_CHA_MT02", "location": "Courthouse"},
-    "CHA_MT03": {"name": "Fuel the Release", "banner": "photo_CHA_MT03", "location": "Courthouse"},
-    "CHJ_MT01": {"name": "Tilt the Scales of Justice", "banner": "photo_CHJ_MT01", "location": "Courthouse"},
-    "CHJ_MT02": {"name": "Sentence the Prosecuted", "banner": "photo_CHJ_MT02", "location": "Courthouse"},
-    "CHJ_MT03": {"name": "Bribe the Judges", "banner": "photo_CHJ_MT03", "location": "Courthouse"},
-
-    "TF_Trial": {"name": "Pervert the Futterman", "banner": "photo_TF_Trial", "location": "Toy Factory"},
-    "TFS_MT01": {"name": "Crush the Sex Toys", "banner": "photo_TFS_MT01", "location": "Toy Factory"},
-    "TFS_MT02": {"name": "Incinerate the Sex Toys", "banner": "photo_TFS_MT02", "location": "Toy Factory"},
-    "TFS_MT03": {"name": "Fumigate the Factory", "banner": "photo_TFS_MT03", "location": "Toy Factory"},
-    "TFW_MT01": {"name": "Shutdown the Factory", "banner": "photo_TFW_MT01", "location": "Toy Factory"},
-    "TFW_MT02": {"name": "Flatten the Foreman", "banner": "photo_TFW_MT02", "location": "Toy Factory"},
-
-    "MH_Trial": {"name": "Poison the Medicine", "banner": "photo_MH_Trial", "location": "Mobster Hideout"},
-    "MHS_MT01": {"name": "Empty the Vault", "banner": "photo_MHS_MT01", "location": "Mobster Hideout"},
-    "MHS_MT02": {"name": "Poison the Cattle", "banner": "photo_MHS_MT02", "location": "Mobster Hideout"},
-    "MHS_MT03": {"name": "Stash the Contraband", "banner": "photo_MHS_MT03", "location": "Mobster Hideout"},
-    "MHS_MT04": {"name": "Cook the Informant", "banner": "photo_MHS_MT04", "location": "Mobster Hideout"},
-
-    "SM_Trial": {"name": "Kill the Politician", "banner": "photo_SM_Trial", "location": "Shopping Mall"},
-    "SMC_MT01": {"name": "Investigate the Minotaur", "banner": "photo_SMC_MT01", "location": "Shopping Mall"},
-    "SMC_MT02": {"name": "Fabricate the Scandal", "banner": "photo_SMC_MT02", "location": "Shopping Mall"},
-
-    "TS_Trial": {"name": "Silence the Idol", "banner": "photo_TS_Trial", "location": "Television Studio"},
-    "TSR_MT01": {"name": "Cancel the Broadcast", "banner": "photo_TSR_MT01", "location": "Television Studio"},
-
-    "DT_Trial": {"name": "Pleasure the Prosecutor", "banner": "photo_DT_Trial"},
-    "DRS_MT01": {"name": "Kidnap the Mistress", "banner": "photo_DRS_MT01"},
-    "DRS_MT02": {"name": "Spread the Disease", "banner": "photo_DRS_MT02"},
-    "DRS_MT03": {"name": "Traffick the Product", "banner": "photo_DRS_MT03"},
-    "DTS_MT01": {"name": "Kidnap the Mistress", "banner": "photo_DRS_MT01"},
-    "DTS_MT02": {"name": "Spread the Disease", "banner": "photo_DRS_MT02"},
-    "DTS_MT03": {"name": "Traffick the Product", "banner": "photo_DTS_MT03"},
-
-    "SR_Trial": {"name": "Liquidate a Union", "banner": "photo_SR_Trial"},
-    "SRR_MT01": {"name": "Get Out the Vote", "banner": "photo_SRR_MT01"},
-    "SRR_MT02": {"name": "Disrupt the Neighborhood", "banner": "photo_SRR_MT02"},
-    "SRR_MT03": {"name": "Eliminate the Legacy", "banner": "photo_SRR_MT03"},
-
-    "RE_Trial": {"name": "Despoil the Auction", "banner": "photo_RE_Trial"},
-    "RES_MT01": {"name": "Solve the Murder", "banner": "photo_RES_MT01"},
-    "RES_MT02": {"name": "Incinerate the Relic", "banner": "photo_RES_MT02"},
-
-    "AE_Trial": {"name": "Escape the Lies", "banner": "photo_AE_Trial"},
-    "AET_MT01": {"name": "Escape the Lies", "banner": "photo_AET_MT01"},
-
-    "PF_Trial": {"name": "Locksock the Warden", "banner": "photo_PF_Trial"}
-  }
+  "difficulties": [
+    { "key": "Easy", "code": 1, "name": "Introductory" },
+    { "key": "Normal", "code": 2, "name": "Standard" },
+    { "key": "Hard", "code": 3, "name": "Intensive" },
+    { "key": "Insane", "code": 4, "name": "Psychosurgery" },
+    { "key": "Undefined", "code": null, "name": "Undefined" }
+  ],
+  "programs": [
+    { "key": "programcore", "name": "Core", "icon": "task_lobby" },
+    { "key": "programchain", "name": "Escalation", "icon": "task_escalation" },
+    { "key": "programinvasion", "name": "Invasion", "icon": "task_invasion" },
+    { "key": "programcreator", "name": "Creator", "icon": "task_trialmaker" },
+    { "key": "programweekly", "name": "Weekly", "icon": "task_weekly" },
+    { "key": "programevent", "name": "Event", "icon": "task_event" }
+  ],
+  "maps": [
+    {
+      "key": "fp",
+      "name": "Fun Park",
+      "image": "photo_FP_Trial",
+      "coreOnly": false,
+      "coreProgram": { "id": "programCoreFP", "poster": "Poster_Program_02" },
+      "trials": [
+        {
+          "id": "FP_Trial",
+          "key": "fp_trial",
+          "name": "Grind the Bad Apples",
+          "image": "photo_FP_Trial"
+        },
+        {
+          "id": "FPB_MT01",
+          "key": "fpb_mt01",
+          "name": "Punish the Miscreants",
+          "image": "photo_FPB_MT01"
+        },
+        {
+          "id": "FPB_MT02",
+          "key": "fpb_mt02",
+          "name": "Open the Gates",
+          "image": "photo_FPB_MT02"
+        },
+        {
+          "id": "FPB_MT03",
+          "key": "fpb_mt03",
+          "name": "Deface the Futtermans",
+          "image": "photo_FPB_MT03"
+        },
+        {
+          "id": "FPC_MT01",
+          "key": "fpc_mt01",
+          "name": "Drill the Futterman",
+          "image": "photo_FPC_MT01"
+        },
+        {
+          "id": "FPC_MT02",
+          "key": "fpc_mt02",
+          "name": "Redeem Your Freedom",
+          "image": "photo_FPC_MT02"
+        },
+        {
+          "id": "FPI_MT01",
+          "key": "fpi_mt01",
+          "name": "Beguile the Children",
+          "image": "photo_FPI_MT01"
+        },
+        { "id": "FPI_MT02", "key": "fpi_mt02", "name": "Win the Truth", "image": "photo_FPI_MT02" }
+      ]
+    },
+    {
+      "key": "ch",
+      "name": "Courthouse",
+      "image": "photo_CH_Trial",
+      "coreOnly": false,
+      "coreProgram": { "id": "programCoreCH", "poster": "Poster_Program_04" },
+      "trials": [
+        {
+          "id": "CH_Trial",
+          "key": "ch_trial",
+          "name": "Vindicate the Guilty",
+          "image": "photo_CH_Trial"
+        },
+        {
+          "id": "CHA_MT01",
+          "key": "cha_mt01",
+          "name": "Escape the Courthouse",
+          "image": "photo_CHA_MT01"
+        },
+        {
+          "id": "CHA_MT02",
+          "key": "cha_mt02",
+          "name": "Destroy the Evidence",
+          "image": "photo_CHA_MT02"
+        },
+        {
+          "id": "CHA_MT03",
+          "key": "cha_mt03",
+          "name": "Fuel the Release",
+          "image": "photo_CHA_MT03"
+        },
+        {
+          "id": "CHJ_MT01",
+          "key": "chj_mt01",
+          "name": "Tilt The Scales of Justice",
+          "image": "photo_CHJ_MT01"
+        },
+        {
+          "id": "CHJ_MT02",
+          "key": "chj_mt02",
+          "name": "Sentence the Prosecuted",
+          "image": "photo_CHJ_MT02"
+        },
+        {
+          "id": "CHJ_MT03",
+          "key": "chj_mt03",
+          "name": "Bribe the Judges",
+          "image": "photo_CHJ_MT03"
+        }
+      ]
+    },
+    {
+      "key": "ps",
+      "name": "Police Station",
+      "image": "photo_PS_Trial",
+      "coreOnly": false,
+      "coreProgram": { "id": "programCorePS", "poster": "Poster_Program_01" },
+      "trials": [
+        {
+          "id": "PS_Trial",
+          "key": "ps_trial",
+          "name": "Kill The Snitch",
+          "image": "photo_PS_Trial"
+        },
+        {
+          "id": "PSA_MT01",
+          "key": "psa_mt01",
+          "name": "Teach the Police Officer",
+          "image": "photo_PSA_MT01"
+        },
+        {
+          "id": "PSB_MT01",
+          "key": "psb_mt01",
+          "name": "Cancel the Autopsy",
+          "image": "photo_PSB_MT01"
+        },
+        {
+          "id": "PSB_MT02",
+          "key": "psb_mt02",
+          "name": "Sabotage the Lockdown",
+          "image": "photo_PSB_MT02"
+        },
+        {
+          "id": "PSB_MT03",
+          "key": "psb_mt03",
+          "name": "Eliminate the Past",
+          "image": "photo_PSB_MT03"
+        },
+        {
+          "id": "PSO_MT01",
+          "key": "pso_mt01",
+          "name": "Release the Prisoners",
+          "image": "photo_PSO_MT01"
+        },
+        {
+          "id": "PSO_MT02",
+          "key": "pso_mt02",
+          "name": "Seize the Narcotics",
+          "image": "photo_PSO_MT02"
+        }
+      ]
+    },
+    {
+      "key": "or",
+      "name": "Orphanage",
+      "image": "photo_OR_Trial",
+      "coreOnly": false,
+      "coreProgram": { "id": "programCoreOR", "poster": "Poster_Program_03" },
+      "trials": [
+        {
+          "id": "OR_Trial",
+          "key": "or_trial",
+          "name": "Cleanse the Orphans",
+          "image": "photo_OR_Trial"
+        },
+        {
+          "id": "ORS_MT01",
+          "key": "ors_mt01",
+          "name": "Feed the Children",
+          "image": "photo_ORS_MT01"
+        },
+        {
+          "id": "ORS_MT02",
+          "key": "ors_mt02",
+          "name": "Foster the Orphans",
+          "image": "photo_ORS_MT02"
+        },
+        {
+          "id": "ORS_MT03",
+          "key": "ors_mt03",
+          "name": "Reunite the Family",
+          "image": "photo_ORS_MT03"
+        },
+        {
+          "id": "ORI_MT01",
+          "key": "ori_mt01",
+          "name": "Gather the Children of God",
+          "image": "photo_ORI_MT01"
+        }
+      ]
+    },
+    {
+      "key": "mh",
+      "name": "Docks",
+      "image": "photo_MH_Trial",
+      "coreOnly": false,
+      "coreProgram": { "id": "programCoreMH", "poster": "Poster_Program_06" },
+      "trials": [
+        {
+          "id": "MH_Trial",
+          "key": "mh_trial",
+          "name": "Poison the Medicine",
+          "image": "photo_MH_Trial"
+        },
+        {
+          "id": "MHS_MT01",
+          "key": "mhs_mt01",
+          "name": "Empty the Vault",
+          "image": "photo_MHS_MT01"
+        },
+        {
+          "id": "MHS_MT02",
+          "key": "mhs_mt02",
+          "name": "Poison the Cattle",
+          "image": "photo_MHS_MT02"
+        },
+        {
+          "id": "MHS_MT03",
+          "key": "mhs_mt03",
+          "name": "Stash the Contraband",
+          "image": "photo_MHS_MT03"
+        },
+        {
+          "id": "MHS_MT04",
+          "key": "mhs_mt04",
+          "name": "Cook the Informant",
+          "image": "photo_MHS_MT04"
+        }
+      ]
+    },
+    {
+      "key": "sr",
+      "name": "Suburb",
+      "image": "photo_SR_Trial",
+      "coreOnly": false,
+      "coreProgram": { "id": "programCoreSR", "poster": "Poster_Program_08" },
+      "trials": [
+        {
+          "id": "SR_Trial",
+          "key": "sr_trial",
+          "name": "Liquidate the Union",
+          "image": "photo_SR_Trial"
+        },
+        {
+          "id": "SRR_MT01",
+          "key": "srr_mt01",
+          "name": "Get Out the Vote",
+          "image": "photo_SRR_MT01"
+        },
+        {
+          "id": "SRR_MT02",
+          "key": "srr_mt02",
+          "name": "Disrupt the Neighborhood",
+          "image": "photo_SRR_MT02"
+        },
+        {
+          "id": "SRR_MT03",
+          "key": "srr_mt03",
+          "name": "Eliminate the Legacy",
+          "image": "photo_SRR_MT03"
+        }
+      ]
+    },
+    {
+      "key": "tf",
+      "name": "Toy Factory",
+      "image": "photo_TF_Trial",
+      "coreOnly": false,
+      "coreProgram": { "id": "programCoreTF", "poster": "Poster_Program_05" },
+      "trials": [
+        {
+          "id": "TF_Trial",
+          "key": "tf_trial",
+          "name": "Pervert the Futterman",
+          "image": "photo_TF_Trial"
+        },
+        {
+          "id": "TFS_MT01",
+          "key": "tfs_mt01",
+          "name": "Crush the Sex Toys",
+          "image": "photo_TFS_MT01"
+        },
+        {
+          "id": "TFS_MT02",
+          "key": "tfs_mt02",
+          "name": "Incinerate the Sex Toys",
+          "image": "photo_TFS_MT02"
+        },
+        {
+          "id": "TFS_MT03",
+          "key": "tfs_mt03",
+          "name": "Fumigate the Factory",
+          "image": "photo_TFS_MT03"
+        },
+        {
+          "id": "TFW_MT01",
+          "key": "tfw_mt01",
+          "name": "Shutdown the Factory",
+          "image": "photo_TFW_MT01"
+        },
+        {
+          "id": "TFW_MT02",
+          "key": "tfw_mt02",
+          "name": "Flatten the Foreman",
+          "image": "photo_TFW_MT02"
+        },
+        {
+          "id": "TFW_MT03",
+          "key": "tfw_mt03",
+          "name": "Sanitize the Factory",
+          "image": "photo_TFW_MT03"
+        }
+      ]
+    },
+    {
+      "key": "dt",
+      "name": "Down Town",
+      "image": "photo_DT_Trial",
+      "coreOnly": false,
+      "coreProgram": { "id": "programCoreDT", "poster": "Poster_Program_07" },
+      "trials": [
+        {
+          "id": "DT_Trial",
+          "key": "dt_trial",
+          "name": "Pleasure the Prosecutor",
+          "image": "photo_DT_Trial"
+        },
+        {
+          "id": "DTS_MT01",
+          "key": "dts_mt01",
+          "name": "Kidnap the Mistress",
+          "image": "photo_DRS_MT01"
+        },
+        {
+          "id": "DTS_MT02",
+          "key": "dts_mt02",
+          "name": "Spread the Disease",
+          "image": "photo_DRS_MT02"
+        },
+        {
+          "id": "DTS_MT03",
+          "key": "dts_mt03",
+          "name": "Traffick the Product",
+          "image": "photo_DTS_MT03"
+        }
+      ]
+    },
+    {
+      "key": "sm",
+      "name": "Shopping Mall",
+      "image": "photo_SM_Trial",
+      "coreOnly": false,
+      "coreProgram": { "id": "programCoreSM", "poster": "Poster_Program_09" },
+      "trials": [
+        {
+          "id": "SM_Trial",
+          "key": "sm_trial",
+          "name": "Kill the Politician",
+          "image": "photo_SM_Trial"
+        },
+        {
+          "id": "SMC_MT01",
+          "key": "smc_mt01",
+          "name": "Investigate the Minotaur",
+          "image": "photo_SMC_MT01"
+        },
+        {
+          "id": "SMC_MT02",
+          "key": "smc_mt02",
+          "name": "Fabricate the Scandal",
+          "image": "photo_SMC_MT02"
+        }
+      ]
+    },
+    {
+      "key": "re",
+      "name": "Resort",
+      "image": "photo_RE_Trial",
+      "coreOnly": false,
+      "coreProgram": { "id": "programCoreRE", "poster": "Poster_Program_10" },
+      "trials": [
+        {
+          "id": "RE_Trial",
+          "key": "re_trial",
+          "name": "Despoil the Auction",
+          "image": "photo_RE_Trial"
+        },
+        {
+          "id": "RES_MT01",
+          "key": "res_mt01",
+          "name": "Solve The Murder",
+          "image": "photo_RES_MT01"
+        },
+        {
+          "id": "RES_MT02",
+          "key": "res_mt02",
+          "name": "Incinerate The Relic",
+          "image": "photo_RES_MT02"
+        }
+      ]
+    },
+    {
+      "key": "pf",
+      "name": "Prison Farm",
+      "image": "photo_PF_Trial",
+      "coreOnly": false,
+      "coreProgram": { "id": "programCorePF", "poster": "Poster_Program_13" },
+      "trials": [
+        {
+          "id": "PF_Trial",
+          "key": "pf_trial",
+          "name": "Locksock The Warden",
+          "image": "photo_PF_Trial"
+        }
+      ]
+    },
+    {
+      "key": "ts",
+      "name": "Television Studio",
+      "image": "photo_TS_Trial",
+      "coreOnly": true,
+      "coreProgram": { "id": "programCoreTS", "poster": "Poster_Program_11" },
+      "trials": [
+        {
+          "id": "TS_Trial",
+          "key": "ts_trial",
+          "name": "Silence the Idol",
+          "image": "photo_TS_Trial"
+        },
+        {
+          "id": "TSR_MT01",
+          "key": "tsr_mt01",
+          "name": "Cancel the Broadcast",
+          "image": "photo_TSR_MT01"
+        }
+      ]
+    },
+    {
+      "key": "ae",
+      "name": "Escape",
+      "image": "photo_AET_MT01",
+      "coreOnly": true,
+      "coreProgram": { "id": "programCoreAE", "poster": "Poster_Program_12" },
+      "trials": [
+        {
+          "id": "AET_MT01",
+          "key": "aet_mt01",
+          "name": "Escape the Lies",
+          "image": "photo_AET_MT01"
+        }
+      ]
+    }
+  ],
+  "posters": [
+    { "name": "Weekly-Event", "ids": [], "prefix": "programW", "image": "Poster_Program_Weekly" },
+    { "name": "Core", "ids": ["programCore"], "image": "Poster_Program_Core" },
+    { "name": "Rebirth", "ids": ["programReborn"], "image": "Poster_Program_Weekly" },
+    { "name": "Escalation", "ids": ["programCHAIN"], "image": "Poster_Program_Chain" },
+    { "name": "Trial Maker", "ids": ["programCREATOR"], "image": "Poster_Trial_Maker" },
+    { "name": "Invasion", "ids": ["programINVASION"], "image": "Poster_Program_Pvp" },
+    { "name": "Toxic", "ids": ["programToxic"], "image": "Poster_Program_Toxic" },
+    {
+      "name": "Stamps",
+      "ids": [
+        "programStamps",
+        "programStamps1",
+        "programStamps2",
+        "programStamps3",
+        "programStamps4",
+        "programStamps5"
+      ],
+      "image": "Poster_Program_Stamps"
+    },
+    { "name": "Amelia", "ids": ["programAmelia"], "image": "Poster_Program_Amelia", "parts": 2 },
+    { "name": "Bomb", "ids": ["programBomb"], "image": "Poster_Program_Bomb", "parts": 2 },
+    {
+      "name": "Christmas",
+      "ids": ["programChristmas"],
+      "image": "Poster_Program_Christmas2025",
+      "parts": 2
+    },
+    { "name": "Franco", "ids": ["programFranco"], "image": "Poster_Program_Franco", "parts": 2 },
+    {
+      "name": "Halloween",
+      "ids": ["programHalloween"],
+      "image": "cover_event_halloween2026",
+      "parts": 7
+    },
+    { "name": "Jaeger", "ids": ["programJaeger"], "image": "Poster_Program_Jaeger", "parts": 2 },
+    {
+      "name": "Prime Time",
+      "ids": ["programPrime"],
+      "image": "Poster_Program_Prime02",
+      "parts": 2
+    },
+    {
+      "name": "Deep Burn",
+      "ids": ["ProgramDeepBurn"],
+      "image": "Poster_Program_DeepBurn",
+      "parts": 2
+    },
+    {
+      "name": "Kress Twins",
+      "ids": ["programKressTwins"],
+      "image": "Poster_Program_KressTwins",
+      "parts": 2
+    },
+    {
+      "name": "LiliyaTime",
+      "ids": ["programLiliyaTime"],
+      "image": "Poster_Program_LiliyaTime",
+      "parts": 2
+    },
+    {
+      "name": "Scavenger",
+      "ids": ["programScavenger"],
+      "image": "Poster_Program_Scavenger",
+      "parts": 2
+    },
+    {
+      "name": "Blood Donation",
+      "ids": ["programBloodDonation"],
+      "image": "Poster_Program_BloodDonations",
+      "parts": 5
+    },
+    {
+      "name": "Chemical LEAK",
+      "ids": ["programChemical"],
+      "image": "Poster_Program_Toxic",
+      "parts": 4
+    }
+  ]
 }
