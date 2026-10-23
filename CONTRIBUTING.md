@@ -38,13 +38,28 @@ startup, so a recorded session runs end to end.
 | `--no-install` | Do not copy the executable into `%LOCALAPPDATA%` and relaunch |
 | `--silent` | No console output; this is what the autostart entry uses |
 
+Discord Rich Presence also asks outlasttrialsstats.com for your own live presence every 10 seconds
+(`GET /api/live/presence/{profileId}`), because the game no longer logs it. The first request only
+queues the profile (`202` with `Retry-After`); later ones return the game's raw presence object
+(`200`), whose placeholders (`-1`, `"-"`, `""`) the app turns into nothing. A dry run skips that:
+the live presence has nothing to do with a recorded log. To try it against a local backend, point
+the app at one. The lookup only reads, and a dry run still contributes nothing:
+
+```powershell
+$env:TOTSTATS_API_BASE = "http://localhost:8084/api"
+.venv\Scripts\python -m totstats --dry-run --verbose --logs-dir C:\temp\logs
+```
+
 ## Before opening a pull request
 
 ```powershell
 .venv\Scripts\ruff check .
+.venv\Scripts\python -m pytest
 ```
 
-CI runs the same command and the build job depends on it. There is no test suite yet.
+CI runs the lint and the build job depends on it. The tests in `tests/` cover the presence state
+machine, the log and API parsing and the live poller, with hand-built log lines and responses in
+`tests/presence_fixtures.py`.
 
 To produce the executable:
 

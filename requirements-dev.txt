@@ -3,3 +3,4 @@
 -e .
 ruff
 pyinstaller
+pytest

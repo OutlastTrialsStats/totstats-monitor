@@ -3,6 +3,10 @@
 The watcher thread must never wait on a socket, so it only ever drops the newest state into a
 mailbox. The worker decides when that state is worth sending — Discord rate-limits status updates,
 and most log lines do not change anything the user can see.
+
+The live poller feeds presence samples into the same state machine from its own thread. A lock
+serialises it with the watcher, and a generation counter tells it when a sample it fetched
+belongs to a state that has since been thrown away.
 """
 
 from __future__ import annotations
@@ -12,7 +16,9 @@ import time
 
 from totstats.presence.catalog import Catalog
 from totstats.presence.client import DiscordClient
-from totstats.presence.parser import PresenceParser
+from totstats.presence.live_api import LivePresenceApi
+from totstats.presence.live_poller import LivePresencePoller, LiveTarget
+from totstats.presence.parser import MapLoad, PresenceParser, PresenceSample
 from totstats.presence.render import Payload, render
 from totstats.presence.state import GameState, StateMachine
 from totstats.shared.applog import AppLog
@@ -142,6 +148,8 @@ class PresenceService:
         catalog: Catalog,
         ids: OwnProfileIdResolver,
         log: AppLog,
+        live_api: LivePresenceApi | None = None,
+        machine: StateMachine | None = None,
     ) -> None:
         self._client = client
         self._catalog = catalog
@@ -149,7 +157,12 @@ class PresenceService:
         self._log = log
 
         self._parser = PresenceParser()
-        self._machine = StateMachine()
+        self._machine = machine or StateMachine()
+        # Guards the state machine, _generation and _replaying: the watcher and the live poller
+        # both write them.
+        self._lock = threading.Lock()
+        self._generation = 0
+        self._live = None if live_api is None else LivePresencePoller(live_api, self, log)
         self._mailbox = _Mailbox()
         self._limiter = RateLimiter()
         self._worker: threading.Thread | None = None
@@ -180,9 +193,13 @@ class PresenceService:
             return
         self._worker = threading.Thread(target=self._run, name="presence-rpc", daemon=True)
         self._worker.start()
+        if self._live is not None:
+            self._live.start()
 
     def stop(self, timeout: float = 3.0) -> None:
         worker = self._worker
+        if self._live is not None:
+            self._live.stop(timeout)
         self._mailbox.close()
         if worker is None:
             return
@@ -204,36 +221,80 @@ class PresenceService:
 
     def on_rotate(self) -> None:
         self._log.debug("🎮 New log file, rebuilding the game state")
-        self._machine.reset()
-        self._unknown_trials.clear()
-        self._replaying = True
-        self._live_since = 0.0
-        self._publish()
+        with self._lock:
+            self._reset_machine()
+            self._unknown_trials.clear()
+            self._publish()
+        self._poke_live()
 
     def on_replay_complete(self) -> None:
         """Nothing is published during a replay, so a mid-session start shows one state, not ten."""
-        if not self._replaying:
-            return
-        self._replaying = False
-        state = _describe(GameState(), self._machine.snapshot) or "nothing known yet"
-        self._log.debug(f"🎮 Caught up with the log: {state}")
-        self._publish()
+        with self._lock:
+            if not self._replaying:
+                return
+            self._replaying = False
+            state = _describe(GameState(), self._machine.snapshot) or "nothing known yet"
+            self._log.debug(f"🎮 Caught up with the log: {state}")
+            self._publish()
+        self._poke_live()
 
     def _feed(self, line: LogLine) -> None:
         self._ids.feed(line)
         event = self._parser.parse(line)
         if event is None:
             return
-        before = self._machine.snapshot
-        if not self._machine.apply(event, line.ts, live=not line.replay):
-            return
-        # A replay walks through every transition of the session; only the result is worth a line.
-        if not self._replaying:
+        with self._lock:
+            before = self._machine.snapshot
+            if not self._machine.apply(event, line.ts, live=not line.replay):
+                return
+            # A replay walks through every transition of the session; only the result is worth
+            # a line.
+            if not self._replaying:
+                changed = _describe(before, self._machine.snapshot)
+                if changed:
+                    self._log.debug(f"🎮 {changed}")
+            self._note_unknown_trial()
+            self._publish()
+        if isinstance(event, MapLoad) and not line.replay:
+            self._poke_live()
+
+    # --- live poller thread ---------------------------------------------------------------
+
+    def live_target(self) -> LiveTarget | None:
+        """Whom the poller should ask about, or None while nothing is worth asking for."""
+        if not self.enabled or not self.game_running:
+            return None
+        profile_id = self._ids.profile_id
+        with self._lock:
+            # A sample merged into a half-replayed state would be overwritten by the rest of it.
+            if profile_id is None or self._replaying:
+                return None
+            return LiveTarget(profile_id, self._generation, self._machine.sample_hold())
+
+    def on_sample(self, sample: PresenceSample, generation: int) -> None:
+        with self._lock:
+            if generation != self._generation or self._replaying:
+                self._log.debug("🌐 Dropped a live presence sample from before the state was reset")
+                return
+            before = self._machine.snapshot
+            if not self._machine.apply_sample(sample):
+                return
             changed = _describe(before, self._machine.snapshot)
             if changed:
-                self._log.debug(f"🎮 {changed}")
-        self._note_unknown_trial()
-        self._publish()
+                self._log.debug(f"🌐 {changed}")
+            self._note_unknown_trial()
+            self._publish()
+
+    def _poke_live(self) -> None:
+        if self._live is not None:
+            self._live.poke()
+
+    def _reset_machine(self) -> None:
+        """Called with the lock held. Every sample in flight belongs to the old state from here."""
+        self._machine.reset()
+        self._generation += 1
+        self._replaying = True
+        self._live_since = 0.0
 
     def _note_unknown_trial(self) -> None:
         trial_id = self._machine.snapshot.trial_id
@@ -255,6 +316,8 @@ class PresenceService:
     def set_enabled(self, enabled: bool) -> None:
         self.enabled = enabled
         self._mailbox.nudge()
+        if enabled:
+            self._poke_live()
 
     def set_catalog(self, catalog: Catalog) -> None:
         self._catalog = catalog
@@ -263,18 +326,18 @@ class PresenceService:
     def on_game_started(self, started_at: float | None = None) -> None:
         self.game_running = True
         self._session_start = started_at or time.time()
-        self._machine.reset()
-        self._replaying = True
-        self._live_since = 0.0
+        with self._lock:
+            self._reset_machine()
         self._mailbox.nudge()
+        self._poke_live()
 
     def on_game_stopped(self) -> None:
         self.game_running = False
         self._session_start = None
-        self._machine.reset()
-        self._replaying = True
-        self._live_since = 0.0
-        self._mailbox.put(self._machine.snapshot)
+        with self._lock:
+            self._reset_machine()
+            snapshot = self._machine.snapshot
+        self._mailbox.put(snapshot)
 
     # --- worker thread --------------------------------------------------------------------
 
@@ -350,8 +413,11 @@ class PresenceService:
             return
         if time.monotonic() - self._live_since > REPLAY_GUARD:
             self._log.debug("🎮 The log replay never reported finishing; showing the status anyway")
-            self._replaying = False
-            self._mailbox.put(self._machine.snapshot)
+            with self._lock:
+                self._replaying = False
+                snapshot = self._machine.snapshot
+            self._mailbox.put(snapshot)
+            self._poke_live()
 
     def _retire(self) -> None:
         if self._retired:

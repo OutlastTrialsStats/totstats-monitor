@@ -18,6 +18,7 @@ from totstats.presence import DISCORD_CLIENT_ID
 from totstats.presence.catalog import load_catalog
 from totstats.presence.catalog_sync import CatalogSync
 from totstats.presence.client import DiscordClient
+from totstats.presence.live_api import LivePresenceApi
 from totstats.presence.service import PresenceService
 from totstats.shared import autostart, installer, paths
 from totstats.shared.applog import AppLog
@@ -87,7 +88,10 @@ class App:
         self._discord = DiscordClient(
             DISCORD_CLIENT_ID, self.log, dry_run=args.dry_run and not args.presence_connect
         )
-        self.presence = PresenceService(self._discord, catalog, self._ids, self.log)
+        self._live_api = LivePresenceApi(dry_run=args.dry_run)
+        self.presence = PresenceService(
+            self._discord, catalog, self._ids, self.log, live_api=self._live_api
+        )
         self.presence.enabled = self.settings.features.presence
         self._catalog_sync = (
             None
@@ -288,6 +292,7 @@ class App:
         self.contribute.stop()
         self.presence.stop()
         self._api.close()
+        self._live_api.close()
         watcher.join(2.0)
         self._tailer.close()
 

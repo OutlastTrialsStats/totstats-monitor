@@ -40,6 +40,10 @@ menu, Sleep Room, looking for a group.
 </p>
 
 It only ever shows something while the game is running, and it needs the Discord desktop app open.
+The game no longer writes everything to its log, so while you play the app also asks
+outlasttrialsstats.com every 10 seconds what the game server reports about your own profile. That
+is where Escalation steps, the Invasion role and "looking for a group" come from. Only your own
+profile ID is sent.
 Untick **Discord Rich Presence** in the tray menu and your status is cleared immediately.
 
 ### Contribute player data

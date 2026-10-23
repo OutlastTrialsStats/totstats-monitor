@@ -6,9 +6,7 @@ from dataclasses import dataclass
 
 import requests
 
-from totstats import __version__
-
-DEFAULT_API_BASE = "https://outlasttrialsstats.com/api"
+from totstats.shared.api import DEFAULT_API_BASE, USER_AGENT
 
 STATUS_OK = 200
 STATUS_ALREADY_KNOWN = 208
@@ -39,7 +37,7 @@ class ContributeApi:
         self._timeout = timeout
         self._dry_run = dry_run
         self._session = session or requests.Session()
-        self._session.headers["User-Agent"] = f"TOTStatsMonitor/{__version__}"
+        self._session.headers["User-Agent"] = USER_AGENT
 
     def close(self) -> None:
         self._session.close()

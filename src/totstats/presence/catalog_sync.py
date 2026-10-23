@@ -13,8 +13,8 @@ from pathlib import Path
 
 import requests
 
-from totstats import __version__
 from totstats.presence.catalog import Catalog, parse_catalog, read_etag, store_cache
+from totstats.shared.api import USER_AGENT
 from totstats.shared.applog import AppLog
 
 CATALOG_URLS = (
@@ -82,7 +82,7 @@ class CatalogSync:
         self._wake.clear()
 
     def _refresh(self) -> None:
-        headers = {"User-Agent": f"TOTStatsMonitor/{__version__}"}
+        headers = {"User-Agent": USER_AGENT}
         etag = read_etag(self._cache_dir)
         if etag:
             headers["If-None-Match"] = etag

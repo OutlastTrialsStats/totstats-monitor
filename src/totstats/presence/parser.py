@@ -1,24 +1,19 @@
-"""Turns game log lines into typed presence events.
+"""Turns game log lines and live presence responses into typed presence events.
 
-Pure and stateless: every function here maps one line to at most one event, so the state machine
-in state.py owns all the interpretation. Anything the game words differently after a patch has to
-degrade to None here rather than raise — the watcher thread runs this.
+Pure and stateless: every function here maps one line, or one response body, to at most one event,
+so the state machine in state.py owns all the interpretation. Anything the game or the API words
+differently after a patch has to degrade to None here rather than raise — the watcher thread and
+the live poller run this.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass
 
 from totstats.shared.log_tail import LogLine
-
-# OnlineCoreHttpLogs: Verbose: Operation FCoreUpdatePresenceOperation(83) request body: {...}
-#
-# Anchored on the operation name, never on "request body:" alone: other operations log bodies too
-# and some of them contain session tokens.
-PRESENCE_OP = "FCoreUpdatePresenceOperation"
-REQUEST_BODY = "request body:"
 
 # RB:  GameStageInfo changed. Program ID: programCoreCH, Trial ID: CHJ_MT03,
 #      Program difficulty: Normal, Stage: CourthouseJudicial, Mission: CHJ_MT03, Seed: 617617,
@@ -45,14 +40,20 @@ _MAPS = (
     ("/Game/Maps/Global/OPP_Persistent", MAP_TRIAL),
 )
 
-# Difficulty reaches us as text ~1.5 s before the presence body carries the number.
+# The log names the difficulty; the live presence carries it as a number.
 DIFFICULTY_BY_TEXT = {"Easy": 1, "Normal": 2, "Hard": 3, "Insane": 4}
 
 
 @dataclass(frozen=True)
-class PresencePost:
-    """The presence the game publishes about itself — the authoritative view of own state."""
+class PresenceSample:
+    """Our own presence as the game server last saw it, fetched from outlasttrialsstats.com.
 
+    The game stopped logging the presence it posts, so this is the only source for what the log
+    never says: looking for a group, preparing, Escalation steps and the Invasion role. It lags
+    the log by seconds, which is why state.py treats it as a supplement, never as the truth.
+    """
+
+    online: bool
     presence_state: str | None
     program_id: str | None
     trial_id: str | None
@@ -60,6 +61,9 @@ class PresencePost:
     chain_step: int | None
     player_count: int | None
     invasion_state: str | None
+
+    received_at: float
+    """Monotonic time the response arrived."""
 
 
 @dataclass(frozen=True)
@@ -95,16 +99,17 @@ class GameExit:
     pass
 
 
-Event = PresencePost | StageInfo | PhaseChange | MapLoad | PartyRoster | GameExit
+Event = StageInfo | PhaseChange | MapLoad | PartyRoster | GameExit
 
 
 def _text(value: object) -> str | None:
-    return value if isinstance(value, str) and value else None
+    """The game marks an unset text as "-" or ""."""
+    return value if isinstance(value, str) and value not in ("", "-") else None
 
 
 def _count(value: object) -> int | None:
-    """Player counts arrive as ints in own bodies and as floats in received messages."""
-    if isinstance(value, bool) or not isinstance(value, int | float):
+    """The game sends every number as a float and marks an unset one as -1."""
+    if isinstance(value, bool) or not isinstance(value, int | float) or not math.isfinite(value):
         return None
     number = int(value)
     return number if number > 0 else None
@@ -122,7 +127,6 @@ def _chain_step(value: object) -> int | None:
 
 class PresenceParser:
     INTERESTS = (
-        PRESENCE_OP,
         "GameStageInfo changed",
         "GamePhase changed to ",
         "LogLoad: LoadMap:",
@@ -132,8 +136,6 @@ class PresenceParser:
 
     def parse(self, line: LogLine) -> Event | None:
         raw = line.raw
-        if PRESENCE_OP in raw:
-            return self._presence(raw)
         if "GameStageInfo changed" in raw:
             return self._stage_info(raw)
         if "GamePhase changed to " in raw:
@@ -145,26 +147,6 @@ class PresenceParser:
         if "LogExit: Exiting." in raw:
             return GameExit()
         return None
-
-    def _presence(self, raw: str) -> PresencePost | None:
-        marker = raw.find(REQUEST_BODY)
-        if marker < 0:
-            return None
-        body = _load_json(raw, raw.find("{", marker))
-        if body is None:
-            return None
-        properties = body.get("properties")
-        if not isinstance(properties, dict):
-            return None
-        return PresencePost(
-            presence_state=_text(properties.get("presenceState")),
-            program_id=_text(properties.get("programId")),
-            trial_id=_text(properties.get("trialId")),
-            difficulty=_difficulty(properties.get("programDifficulty")),
-            chain_step=_chain_step(properties.get("trialChain")),
-            player_count=_count(properties.get("playerCount")),
-            invasion_state=_text(properties.get("invasionState")),
-        )
 
     def _stage_info(self, raw: str) -> StageInfo | None:
         match = STAGE_INFO_RE.search(raw)
@@ -226,3 +208,29 @@ def _load_json(raw: str, start: int) -> dict | None:
     except ValueError:
         return None
     return parsed if isinstance(parsed, dict) else None
+
+
+def parse_sample(body: object, received_at: float) -> PresenceSample | None:
+    """One raw presence object from the live API, or None when it is not the shape we expect.
+
+    A profile without presence has properties null; the game's placeholders become None here.
+    """
+    if not isinstance(body, dict):
+        return None
+    online = body.get("online")
+    if not isinstance(online, bool):
+        return None
+    props = body.get("properties")
+    if not isinstance(props, dict):
+        props = {}
+    return PresenceSample(
+        online=online,
+        presence_state=_text(props.get("presenceState")),
+        program_id=_text(props.get("programId")),
+        trial_id=_text(props.get("trialId")),
+        difficulty=_difficulty(props.get("programDifficulty")),
+        chain_step=_chain_step(props.get("trialChain")),
+        player_count=_count(props.get("playerCount")),
+        invasion_state=_text(props.get("invasionState")),
+        received_at=received_at,
+    )
