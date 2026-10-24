@@ -11,6 +11,8 @@ MIN_TEXT = 2
 SEPARATOR = " • "
 GAME_NAME = "The Outlast Trials"
 
+TRIAL_ACTIVITIES = (Activity.PREPARING, Activity.TRIAL, Activity.CHAIN)
+
 ROLE_ICONS = {InvasionRole.REAGENT: "icon_reagent", InvasionRole.IMPOSTER: "icon_invader"}
 
 
@@ -63,7 +65,7 @@ def render(
     if state.activity in (Activity.UNKNOWN, Activity.OFFLINE):
         return None
 
-    trial = catalog.trial(state.trial_id)
+    trial = catalog.trial(state.trial_id) if state.activity in TRIAL_ACTIVITIES else None
     details, description = _describe(
         state, trial, catalog.program_name(state.program_id), catalog.difficulty_name(state.difficulty)
     )
@@ -77,7 +79,7 @@ def render(
         party_id = state.party_key or "party"
         party_size = (state.party_size, max(state.party_max, state.party_size))
 
-    start = state.trial_started_at if state.in_trial and state.trial_started_at else session_start
+    start = state.trial_started_at if state.in_trial else session_start
 
     large_text = GAME_NAME
     if trial is not None:
@@ -120,6 +122,8 @@ def _describe(
             parts.append(f"Step {state.chain_step}")
     else:
         headline = trial.name if trial is not None else (program or "In a Trial")
+        if trial is not None and program:
+            parts.append(program)
         if trial is not None and trial.location:
             parts.append(trial.location)
 

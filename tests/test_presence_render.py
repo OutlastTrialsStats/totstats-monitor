@@ -36,7 +36,7 @@ def test_a_known_trial_renders():
     state = GameState(activity=Activity.TRIAL, program_id="programCoreFP", trial_id="FP_Trial", difficulty=2)
     payload = render(state, site(), "pid").as_kwargs()
     assert payload["details"] == "Grind the Bad Apples"
-    assert payload["state"] == "Fun Park • Standard"
+    assert payload["state"] == "Core Program • Fun Park • Standard"
     assert payload["large_image"] == f"{ASSETS}photo_FP_Trial.webp"
     assert payload["large_text"] == "Grind the Bad Apples — Fun Park"
     assert payload["buttons"] == [
@@ -97,6 +97,25 @@ def test_outside_a_trial(activity, details, description):
     assert payload.large_image == f"{ASSETS}murkoff_logo.webp"
     assert payload.large_text == "The Outlast Trials"
     assert payload.start == 1792786874
+
+
+@pytest.mark.parametrize(
+    "activity", [Activity.SLEEP_ROOM, Activity.MATCHMAKING, Activity.RETURNING, Activity.MAIN_MENU]
+)
+def test_a_leftover_trial_does_not_keep_its_banner_outside_a_trial(activity):
+    state = GameState(activity=activity, program_id="programCoreFP", trial_id="FP_Trial")
+    payload = render(state, site())
+    assert payload is not None
+    assert payload.large_image == f"{ASSETS}murkoff_logo.webp"
+    assert payload.large_text == "The Outlast Trials"
+
+
+def test_the_clock_waits_for_the_round_to_start_instead_of_counting_the_session():
+    waiting = GameState(activity=Activity.TRIAL, trial_id="PSA_MT01")
+    assert render(waiting, site(), session_start=1792786874.5).start is None
+
+    started = GameState(activity=Activity.TRIAL, trial_id="PSA_MT01", trial_started_at=1792787874.5)
+    assert render(started, site(), session_start=1792786874.5).start == 1792787874
 
 
 @pytest.mark.parametrize("activity", [Activity.OFFLINE, Activity.UNKNOWN])
