@@ -5,6 +5,7 @@ import threading
 from types import SimpleNamespace
 
 import pytest
+import requests
 from presence_fixtures import FakeLog
 
 from totstats.presence import catalog_sync
@@ -12,7 +13,6 @@ from totstats.presence.catalog import (
     EXTRA_TRIALS,
     load_catalog,
     parse_catalog,
-    read_etag,
 )
 from totstats.presence.catalog_sync import REFRESH_INTERVAL, RETRY_INTERVAL, CatalogSync
 
@@ -73,26 +73,27 @@ def test_without_a_cached_download_only_the_extra_trials_are_known(tmp_path):
     assert catalog.difficulty_name(3) == "Intensive"
 
 
-def test_a_cached_download_wins_and_a_broken_one_is_set_aside(tmp_path):
+def test_a_cached_download_wins_and_a_broken_one_is_ignored(tmp_path):
     log = FakeLog()
     (tmp_path / "site-trials.json").write_text(json.dumps(SITE_CATALOG), encoding="utf-8")
     assert load_catalog(log, tmp_path).trial("FP_Trial").name == "Grind"
 
     (tmp_path / "site-trials.json").write_text("{}", encoding="utf-8")
     assert load_catalog(log, tmp_path).trial("FP_Trial") is None
-    assert (tmp_path / "site-trials.json.bad").exists()
 
 
 class FakeSession:
-    def __init__(self, status: int, body: bytes = b"", etag: str | None = None) -> None:
-        self.response = SimpleNamespace(
-            status_code=status, content=body, headers={"ETag": etag} if etag else {}
-        )
+    def __init__(self, status: int, body: bytes = b"") -> None:
+        self.response = SimpleNamespace(status_code=status, content=body, raise_for_status=self._check)
         self.headers: dict[str, str] = {}
-        self.calls: list[tuple[str, dict]] = []
+        self.calls: list[str] = []
 
-    def get(self, url: str, headers: dict, timeout: object) -> SimpleNamespace:
-        self.calls.append((url, headers))
+    def _check(self) -> None:
+        if self.response.status_code >= 400:
+            raise requests.HTTPError(f"HTTP {self.response.status_code}")
+
+    def get(self, url: str, timeout: object) -> SimpleNamespace:
+        self.calls.append(url)
         return self.response
 
 
@@ -112,25 +113,10 @@ def sync(tmp_path, received: list) -> CatalogSync:
 def test_a_download_is_cached_and_handed_over(tmp_path, serve):
     received: list = []
     body = json.dumps(SITE_CATALOG).encode("utf-8")
-    serve(FakeSession(200, body, etag='"abc"'))
+    serve(FakeSession(200, body))
     assert sync(tmp_path, received)._refresh() is True
     assert received[0].trial("FP_Trial").name == "Grind"
     assert (tmp_path / "site-trials.json").read_bytes() == body
-    assert read_etag(tmp_path) == '"abc"'
-
-    session = serve(FakeSession(304))
-    assert sync(tmp_path, received)._refresh() is True
-    assert session.calls[0][1]["If-None-Match"] == '"abc"'
-    assert len(received) == 1
-
-
-def test_a_lost_cache_is_downloaded_again_despite_its_etag(tmp_path, serve):
-    received: list = []
-    (tmp_path / "site-trials.meta.json").write_text('{"etag": "\\"abc\\""}', encoding="utf-8")
-    session = serve(FakeSession(200, json.dumps(SITE_CATALOG).encode("utf-8")))
-    assert sync(tmp_path, received)._refresh() is True
-    assert "If-None-Match" not in session.calls[0][1]
-    assert len(received) == 1
 
 
 def test_unusable_responses_change_nothing(tmp_path, serve):

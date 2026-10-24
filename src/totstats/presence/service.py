@@ -15,9 +15,7 @@ from totstats.shared.applog import AppLog
 from totstats.shared.log_tail import LogLine
 from totstats.shared.profile_id import OwnProfileIdResolver
 
-RATE_CAPACITY = 2
-RATE_REFILL = 15.0
-RATE_FLOOR = 5.0
+MIN_UPDATE_INTERVAL = 15.0
 
 SETTLE = 2.0
 IDLE_WAIT = 5.0
@@ -46,32 +44,6 @@ def _diff(before: GameState, after: GameState) -> str:
     return ", ".join(changes)
 
 
-class RateLimiter:
-    def __init__(self) -> None:
-        self._tokens = float(RATE_CAPACITY)
-        self._last = 0.0
-        self._sent = 0.0
-
-    def _replenish(self, now: float) -> None:
-        if self._last:
-            self._tokens = min(RATE_CAPACITY, self._tokens + (now - self._last) / RATE_REFILL)
-        self._last = now
-
-    def consume(self, now: float) -> None:
-        self._replenish(now)
-        self._tokens = max(0.0, self._tokens - 1.0)
-        self._sent = now
-
-    def wait(self, now: float) -> float:
-        self._replenish(now)
-        waits = [0.0]
-        if self._tokens < 1.0:
-            waits.append((1.0 - self._tokens) * RATE_REFILL)
-        if self._sent and now - self._sent < RATE_FLOOR:
-            waits.append(RATE_FLOOR - (now - self._sent))
-        return max(waits)
-
-
 class PresenceService:
     INTERESTS = parser.INTERESTS + OwnProfileIdResolver.INTERESTS
 
@@ -90,7 +62,7 @@ class PresenceService:
         self._log = log
         self._machine = machine or StateMachine()
         self._live = None if live_api is None else LivePresencePoller(live_api, self, log)
-        self._limiter = RateLimiter()
+        self._sent_at: float | None = None
         self._lock = threading.Lock()
         self._wake = threading.Event()
         self._stop = threading.Event()
@@ -283,7 +255,7 @@ class PresenceService:
         now = time.monotonic()
         if self._changed_at and now - self._changed_at < SETTLE:
             return SETTLE - (now - self._changed_at)
-        hold = self._limiter.wait(now)
+        hold = 0.0 if self._sent_at is None else MIN_UPDATE_INTERVAL - (now - self._sent_at)
         if hold > 0.0:
             self._hold_once(f"Discord status held: rate limit, {hold:.0f}s left")
             return hold
@@ -294,7 +266,7 @@ class PresenceService:
         sent = self._client.clear() if payload is None else self._client.update(payload)
         if not sent:
             return max(self._client.next_attempt_in(now), 1.0)
-        self._limiter.consume(now)
+        self._sent_at = now
         self._last_sent = payload
         self._held = False
         return IDLE_WAIT

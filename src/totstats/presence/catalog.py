@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import json
 import os
 from dataclasses import dataclass, field
@@ -104,43 +103,25 @@ def cache_path(cache_dir: Path) -> Path:
     return cache_dir / "site-trials.json"
 
 
-def meta_path(cache_dir: Path) -> Path:
-    return cache_dir / "site-trials.meta.json"
-
-
 def load_catalog(log: AppLog, cache_dir: Path | None) -> Catalog:
-    path = cache_path(cache_dir) if cache_dir is not None else None
-    if path is not None and path.exists():
+    if cache_dir is not None:
         try:
-            cached = parse_catalog(json.loads(path.read_text(encoding="utf-8")))
+            cached = parse_catalog(json.loads(cache_path(cache_dir).read_text(encoding="utf-8")))
         except (OSError, ValueError):
             cached = None
         if cached is not None:
             log.debug(f"Trial catalog loaded: {len(cached.trials)} trials")
             return cached
-        with contextlib.suppress(OSError):
-            os.replace(path, path.with_suffix(".json.bad"))
-            log.warning("Trial catalog unreadable, moved to .bad")
 
     log.debug("Trial catalog not downloaded yet")
     return Catalog(dict(EXTRA_TRIALS))
 
 
-def store_cache(cache_dir: Path, body: bytes, etag: str | None, log: AppLog) -> None:
+def store_catalog(cache_dir: Path, body: bytes, log: AppLog) -> None:
     try:
         cache_dir.mkdir(parents=True, exist_ok=True)
         temp = cache_path(cache_dir).with_suffix(".json.tmp")
         temp.write_bytes(body)
         os.replace(temp, cache_path(cache_dir))
-        meta_path(cache_dir).write_text(json.dumps({"etag": etag or ""}, indent=2) + "\n", encoding="utf-8")
     except OSError as exc:
         log.debug(f"Trial catalog not cached: {exc}")
-
-
-def read_etag(cache_dir: Path) -> str | None:
-    try:
-        raw = json.loads(meta_path(cache_dir).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    etag = raw.get("etag") if isinstance(raw, dict) else None
-    return etag if isinstance(etag, str) and etag else None

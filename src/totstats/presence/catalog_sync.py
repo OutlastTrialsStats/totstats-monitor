@@ -7,7 +7,7 @@ from pathlib import Path
 
 import requests
 
-from totstats.presence.catalog import SITE, Catalog, cache_path, parse_catalog, read_etag, store_cache
+from totstats.presence.catalog import SITE, Catalog, parse_catalog, store_catalog
 from totstats.shared.api import USER_AGENT
 from totstats.shared.applog import AppLog
 
@@ -30,8 +30,6 @@ class CatalogSync:
         self._stop = stop
         self._cache_dir = cache_dir
         self._first_delay = first_delay
-        self._downloaded = cache_path(cache_dir).exists()
-        self._unreachable = False
         self._session = requests.Session()
         self._session.headers["User-Agent"] = USER_AGENT
         self._wake = threading.Event()
@@ -52,13 +50,7 @@ class CatalogSync:
             self._wait(delay)
             if self._stop.is_set():
                 break
-            try:
-                ok = self._refresh()
-            except Exception as exc:
-                self._log.debug(f"Trial catalog refresh failed: {exc}")
-                ok = False
-            self._downloaded = self._downloaded or ok
-            delay = REFRESH_INTERVAL if self._downloaded else RETRY_INTERVAL
+            delay = REFRESH_INTERVAL if self._refresh() else RETRY_INTERVAL
         self._session.close()
 
     def _wait(self, seconds: float) -> None:
@@ -66,32 +58,18 @@ class CatalogSync:
         self._wake.clear()
 
     def _refresh(self) -> bool:
-        etag = read_etag(self._cache_dir) if cache_path(self._cache_dir).exists() else None
-        headers = {"If-None-Match": etag} if etag else {}
         try:
-            response = self._session.get(f"{SITE}/data/trials.json", headers=headers, timeout=TIMEOUT)
-        except requests.RequestException as exc:
-            if not self._unreachable:
-                self._unreachable = True
-                self._log.debug(f"Trial catalog unreachable: {exc}")
-            return False
-        self._unreachable = False
-
-        if response.status_code == 304:
-            self._log.debug("Trial catalog unchanged")
-            return True
-        if response.status_code != 200:
-            self._log.debug(f"Trial catalog not updated: HTTP {response.status_code}")
-            return False
-        try:
+            response = self._session.get(f"{SITE}/data/trials.json", timeout=TIMEOUT)
+            response.raise_for_status()
             catalog = parse_catalog(json.loads(response.content.decode("utf-8")))
-        except ValueError:
-            catalog = None
+        except (requests.RequestException, ValueError) as exc:
+            self._log.debug(f"Trial catalog not updated: {exc}")
+            return False
         if catalog is None:
             self._log.debug("Trial catalog not usable")
             return False
 
-        store_cache(self._cache_dir, response.content, response.headers.get("ETag"), self._log)
+        store_catalog(self._cache_dir, response.content, self._log)
         self._log.info(f"Trial catalog updated: {len(catalog.trials)} trials")
         self._on_catalog(catalog)
         return True
