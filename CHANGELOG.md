@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.1.0](https://github.com/OutlastTrialsStats/totstats-monitor/compare/v2.0.1...v2.1.0) (2026-10-24)
+
+
+### Features
+
+* **presence:** load the trial catalog from the website trials.json ([6e5bdef](https://github.com/OutlastTrialsStats/totstats-monitor/commit/6e5bdef1844f88e2b98022b9cbba80bf69efd692))
+* **presence:** read the own presence from the TOTStats live endpoint ([426d205](https://github.com/OutlastTrialsStats/totstats-monitor/commit/426d2054fd6b102fb17a8333b10c85a6185e14f0))
+
+
+### Code Refactoring
+
+* **presence:** drop the catalog ETag cache and the token-bucket rate limiter ([2cfe1a0](https://github.com/OutlastTrialsStats/totstats-monitor/commit/2cfe1a03bd0784bfdd175e3adfed54208100379c))
+* simplify the monitor now that the live endpoint is the only presence source ([1643f1b](https://github.com/OutlastTrialsStats/totstats-monitor/commit/1643f1b124a499e42381f24c907a1ab1fb08801a))
+
 ## [2.0.1](https://github.com/OutlastTrialsStats/totstats-monitor/compare/v2.0.0...v2.0.1) (2026-08-05)
 
 
