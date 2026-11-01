@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/OutlastTrialsStats/totstats-monitor/compare/v2.1.0...v2.1.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* **presence:** stop a leftover trial from keeping its banner outside a trial ([4a56fb6](https://github.com/OutlastTrialsStats/totstats-monitor/commit/4a56fb6fa0c846e0755d5f77ef0b2a7a1000d56a))
+
 ## [2.1.0](https://github.com/OutlastTrialsStats/totstats-monitor/compare/v2.0.1...v2.1.0) (2026-10-24)
 
 
