@@ -17,7 +17,7 @@ class Features:
 
 @dataclass
 class Settings:
-    autostart: bool | None = None
+    autostart_asked: bool = False
     features: Features = field(default_factory=Features)
 
 
@@ -25,8 +25,8 @@ def _parse(raw: object) -> Settings:
     settings = Settings()
     if not isinstance(raw, dict):
         return settings
-    if isinstance(raw.get("autostart"), bool):
-        settings.autostart = raw["autostart"]
+    if isinstance(raw.get("autostart_asked"), bool):
+        settings.autostart_asked = raw["autostart_asked"]
     features = raw.get("features")
     if isinstance(features, dict):
         if isinstance(features.get("contribute"), bool):

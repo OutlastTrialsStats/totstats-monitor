@@ -4,7 +4,7 @@ import argparse
 from collections.abc import Sequence
 
 from totstats import APP_NAME, __version__
-from totstats.shared import installer, windows
+from totstats.shared import paths
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -13,14 +13,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--silent", action="store_true", help="run without console output; used by the autostart entry"
     )
     parser.add_argument(
-        "--no-install",
-        action="store_true",
-        help="do not copy the executable into %%LOCALAPPDATA%% and relaunch",
-    )
-    parser.add_argument(
         "--logs-dir",
         metavar="PATH",
-        help="read game logs from PATH instead of %%LOCALAPPDATA%%\\OPP\\Saved\\Logs",
+        help="read game logs from PATH instead of the game's own log folder",
     )
     parser.add_argument(
         "--dry-run",
@@ -42,9 +37,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--version", action="version", version=f"{APP_NAME} {__version__}")
     args = parser.parse_args(argv)
 
-    windows.enable_dpi_awareness()
-    if not (args.no_install or args.dry_run) and installer.ensure_installed():
-        return 0
+    if paths.is_windows():
+        from totstats.shared import windows
+
+        windows.enable_dpi_awareness()
 
     from totstats.app import App
 

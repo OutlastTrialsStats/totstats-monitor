@@ -3,3 +3,4 @@ requests==2.34.2
 pystray==0.19.5
 Pillow==12.3.0
 pypresence==4.6.2
+python-xlib==0.33; sys_platform == "linux"

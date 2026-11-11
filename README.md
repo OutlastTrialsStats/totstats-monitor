@@ -11,18 +11,37 @@ files, and it needs no launch options.
 
 **No Python installation required.**
 
-[<img src="https://img.shields.io/badge/Download-TOTStatsMonitor.exe-blue?style=for-the-badge&logo=windows" alt="Download TOTStatsMonitor.exe">](https://github.com/OutlastTrialsStats/totstats-monitor/releases/latest/download/TOTStatsMonitor.exe)
+### Windows
 
-1. Download and double-click to run.
-2. That's it.
+[<img src="https://img.shields.io/badge/Download-TOTStatsMonitor--Setup.exe-blue?style=for-the-badge&logo=windows" alt="Download TOTStatsMonitor-Setup.exe">](https://github.com/OutlastTrialsStats/totstats-monitor/releases/latest/download/TOTStatsMonitor-Setup.exe)
 
-The executable is not signed, so Windows SmartScreen will warn you the first time. Click "More
-info", then "Run anyway".
+1. Download and run the installer. It needs no administrator rights.
+2. Keep **Start TOTStatsMonitor when I sign in to Windows** ticked if you want it running the next
+   time you play. Untick it and the app never starts on its own.
+3. Finish, and the app starts in the system tray.
 
-The app copies itself to `%LOCALAPPDATA%\TOTStatsMonitor\` on first run, so you can delete the
-downloaded file afterwards. It also sets itself to start with Windows, so it is already running
-the next time you play. Untick **Start with Windows** in the tray menu and the registry entry is
-removed — that choice sticks, the app will not put it back on the next start.
+The installer is not signed, so Windows SmartScreen will warn you the first time. Click "More
+info", then "Run anyway". Running the installer again updates the app in place.
+
+### Linux
+
+Download `TOTStatsMonitor-linux-x86_64` from the
+[latest release](https://github.com/OutlastTrialsStats/totstats-monitor/releases/latest), make it
+executable and run it:
+
+```sh
+chmod +x TOTStatsMonitor-linux-x86_64
+./TOTStatsMonitor-linux-x86_64
+```
+
+On the first start it asks once whether to launch at login. The app finds the game's log inside
+the Steam Proton prefix on its own, in the default Steam folder and in any extra library listed
+in Steam. If your Steam lives somewhere unusual, point it there with `--logs-dir`.
+
+The tray icon needs a desktop that shows tray icons. On GNOME that means the AppIndicator
+extension. Without one the app still works, and **Console** opens from the first start instead.
+The Discord desktop app must be running; the Flatpak and Snap builds of Discord are not
+supported yet.
 
 ## Features
 
@@ -57,7 +76,7 @@ whole thing off from the tray menu without uninstalling.
 
 ## System Tray
 
-The app runs in the background and shows an icon in the Windows system tray (bottom-right, behind
+The app runs in the background and shows an icon in the system tray (on Windows bottom-right, behind
 the `^` arrow). Right-click it for the menu:
 
 | Option | Description |
@@ -65,9 +84,9 @@ the `^` arrow). Right-click it for the menu:
 | **Status** | Whether it is monitoring, waiting for the game, or paused |
 | **Contribute player data** | Turns contributing on or off immediately, without uninstalling |
 | **Discord Rich Presence** | Shows or hides what you are playing on your Discord profile |
-| **Start with Windows** | Adds or removes the autostart entry |
+| **Start with Windows** (**Start at login** on Linux) | Adds or removes the autostart entry |
 | **Console** | A live log window: detected players, API responses, errors |
-| **Uninstall** | Removes autostart, deletes the installed files, and shuts down |
+| **Uninstall** | Shuts down and starts the uninstaller (Linux: deletes the data folder, you delete the file) |
 | **Exit** | Stops the app without uninstalling |
 
 Everything the app keeps lives in `%LOCALAPPDATA%\TOTStatsMonitor\`: `settings.json`, its own

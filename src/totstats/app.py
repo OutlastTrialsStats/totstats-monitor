@@ -16,7 +16,7 @@ from totstats.presence.catalog_sync import CatalogSync
 from totstats.presence.client import DiscordClient
 from totstats.presence.live_api import LivePresenceApi
 from totstats.presence.service import PresenceService
-from totstats.shared import autostart, installer, paths
+from totstats.shared import autostart, paths, uninstaller
 from totstats.shared.api import api_base_override
 from totstats.shared.applog import AppLog
 from totstats.shared.game_process import GameProcessWatcher
@@ -25,7 +25,6 @@ from totstats.shared.profile_id import OwnProfileIdResolver
 from totstats.shared.settings import SettingsStore
 from totstats.shared.ui_queue import UiQueue
 from totstats.ui.console_window import ConsoleWindow
-from totstats.ui.tray import TrayIcon
 
 TAIL_INTERVAL = 0.25
 PROCESS_INTERVAL = 3.0
@@ -38,7 +37,7 @@ class App:
         self._stop = threading.Event()
         self._uninstalling = False
 
-        data_dir = None if args.dry_run else paths.install_dir()
+        data_dir = None if args.dry_run else paths.data_dir()
         if data_dir is None:
             log_file = Path.cwd() / "totstats-dryrun.log"
             settings_file = None
@@ -102,10 +101,7 @@ class App:
         self._root.withdraw()
         self._root.tk.call("tk", "scaling", self._root.winfo_fpixels("1i") / 72.0)
         self._console = ConsoleWindow(self._root, self.log)
-        self._tray = TrayIcon(self)
-
-        if not self.args.dry_run:
-            self._resolve_autostart()
+        self._tray = self._create_tray()
 
         self.contribute.start()
         self.presence.start()
@@ -113,7 +109,10 @@ class App:
             self._catalog_sync.start()
         watcher = threading.Thread(target=self._watch, name="watcher", daemon=True)
         watcher.start()
-        threading.Thread(target=self._tray.run, name="tray", daemon=True).start()
+        if self._tray is not None:
+            threading.Thread(target=self._run_tray, name="tray", daemon=True).start()
+        if not self.args.dry_run:
+            self.ui.post(self._ask_autostart)
 
         with contextlib.suppress(KeyboardInterrupt):
             self._main_loop()
@@ -131,15 +130,13 @@ class App:
         if self.args.dry_run:
             self.log.info("Dry run: autostart unchanged")
             return
-        self.settings.autostart = not self.settings.autostart
-        if not self.settings.autostart:
+        if autostart.is_enabled():
             autostart.disable()
             self.log.info("Autostart disabled")
         elif autostart.enable():
             self.log.info("Autostart enabled")
         else:
             self.log.warning("Autostart entry could not be written")
-        self.store.save()
 
     def toggle_contribute(self) -> None:
         enabled = not self.settings.features.contribute
@@ -147,7 +144,7 @@ class App:
         self.contribute.enabled = enabled
         self.store.save()
         self.log.info("Contributing enabled" if enabled else "Contributing paused")
-        self._tray.update()
+        self._update_tray()
 
     def toggle_presence(self) -> None:
         enabled = not self.settings.features.presence
@@ -157,30 +154,65 @@ class App:
         if enabled and self._catalog_sync is not None:
             self._catalog_sync.refresh_soon()
         self.log.info("Rich Presence enabled" if enabled else "Rich Presence paused")
-        self._tray.update()
+        self._update_tray()
 
     def uninstall(self) -> None:
+        if self.args.dry_run:
+            self.log.info("Dry run: nothing uninstalled")
+            return
+        if paths.is_windows():
+            # The uninstaller asks for confirmation and closes this app itself.
+            if uninstaller.start():
+                self.log.info("Uninstaller started")
+            else:
+                self.log.warning("No uninstaller found next to the program, nothing was removed")
+            return
+        if not self._confirm("Remove the autostart entry and all settings, then exit?"):
+            return
         self._uninstalling = True
         if autostart.disable():
             self.log.info("Autostart removed")
         self.log.info("Uninstalling")
         self._stop.set()
 
-    def _resolve_autostart(self) -> None:
-        if self.settings.autostart is None:
-            if autostart.migrate_legacy():
-                self.settings.autostart = True
-                self.log.info("Autostart carried over from a previous version")
-            else:
-                self.settings.autostart = autostart.is_enabled() or paths.is_frozen()
-                if self.settings.autostart:
-                    self.log.info("Autostart enabled, change it in the tray menu")
-            self.store.save()
+    def _create_tray(self):
+        try:
+            from totstats.ui.tray import TrayIcon
 
-        if self.settings.autostart:
-            autostart.enable()
-        else:
-            autostart.disable()
+            return TrayIcon(self)
+        except Exception as exc:
+            self.log.warning(f"Tray icon unavailable, use the console window instead: {exc}")
+            self.ui.post(self.open_console)
+            return None
+
+    def _update_tray(self) -> None:
+        if self._tray is not None:
+            self._tray.update()
+
+    def _run_tray(self) -> None:
+        try:
+            self._tray.run()
+        except Exception as exc:
+            self.log.warning(f"Tray icon stopped, use the console window instead: {exc}")
+            self.ui.post(self.open_console)
+
+    def _confirm(self, question: str) -> bool:
+        from tkinter import messagebox
+
+        return messagebox.askyesno(APP_NAME, question)
+
+    def _ask_autostart(self) -> None:
+        # Windows decides this in the installer. Linux has none, so ask once, and only once.
+        if paths.is_windows() or not paths.is_frozen() or self.settings.autostart_asked:
+            return
+        self.settings.autostart_asked = True
+        self.store.save()
+        question = (
+            "Start TOTStatsMonitor automatically when you log in?\n\n"
+            "You can change this any time in the tray menu."
+        )
+        if self._confirm(question) and not autostart.enable():
+            self.log.warning("Autostart entry could not be written")
 
     def _main_loop(self) -> None:
         while not self._stop.is_set():
@@ -210,6 +242,9 @@ class App:
 
     def _on_game_change(self) -> None:
         self._tailer.reset()
+        if self._game.running and not self.args.logs_dir:
+            # The Proton prefix only exists once the game has run, or Steam may have moved.
+            self._tailer.set_logs_dir(paths.game_logs_dir())
         if self._game.running:
             self.log.info("Game started, monitoring")
             self.contribute.on_rotate()
@@ -217,7 +252,7 @@ class App:
         else:
             self.log.info("Game closed, monitoring stopped")
             self.presence.on_game_stopped()
-        self._tray.update()
+        self._update_tray()
 
     def _shutdown(self, watcher: threading.Thread) -> None:
         self._stop.set()
@@ -229,10 +264,11 @@ class App:
             self._live_api.close()
         watcher.join(2.0)
 
-        self._tray.stop()
+        if self._tray is not None:
+            self._tray.stop()
         self._console.close()
         with contextlib.suppress(tk.TclError):
             self._root.destroy()
 
         if self._uninstalling:
-            installer.schedule_uninstall()
+            uninstaller.remove_data()

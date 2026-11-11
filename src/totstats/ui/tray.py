@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import sys
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -8,7 +9,7 @@ import pystray
 from PIL import Image, ImageDraw
 
 from totstats import APP_NAME
-from totstats.shared import paths, windows
+from totstats.shared import autostart, paths
 
 if TYPE_CHECKING:
     from totstats.app import App
@@ -25,12 +26,20 @@ def _image() -> Image.Image:
         return image
 
 
-class _Icon(pystray.Icon):
-    def _assert_icon_handle(self) -> None:
-        if not self._icon_handle:
-            self._icon_handle = windows.load_icon(paths.icon_path(), windows.small_icon_size())
-        if not self._icon_handle:
-            super()._assert_icon_handle()
+if sys.platform == "win32":
+    from totstats.shared import windows
+
+    class _Icon(pystray.Icon):
+        def _assert_icon_handle(self) -> None:
+            if not self._icon_handle:
+                self._icon_handle = windows.load_icon(paths.icon_path(), windows.small_icon_size())
+            if not self._icon_handle:
+                super()._assert_icon_handle()
+
+    AUTOSTART_LABEL = "Start with Windows"
+else:
+    _Icon = pystray.Icon
+    AUTOSTART_LABEL = "Start at login"
 
 
 class TrayIcon:
@@ -71,9 +80,9 @@ class TrayIcon:
                 checked=lambda _item: app.settings.features.presence,
             ),
             pystray.MenuItem(
-                "Start with Windows",
+                AUTOSTART_LABEL,
                 self._post(app.toggle_autostart),
-                checked=lambda _item: bool(app.settings.autostart),
+                checked=lambda _item: autostart.is_enabled(),
             ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Console", self._post(app.open_console)),

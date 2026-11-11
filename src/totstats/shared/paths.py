@@ -5,10 +5,19 @@ import sys
 from pathlib import Path
 
 from totstats import APP_NAME
+from totstats.shared import proton
+
+
+def is_windows() -> bool:
+    return sys.platform == "win32"
 
 
 def is_frozen() -> bool:
     return getattr(sys, "frozen", False)
+
+
+def app_executable() -> Path:
+    return Path(sys.executable)
 
 
 def local_appdata() -> Path:
@@ -16,16 +25,21 @@ def local_appdata() -> Path:
     return Path(raw) if raw else Path.home() / "AppData" / "Local"
 
 
-def install_dir() -> Path:
-    return local_appdata() / APP_NAME
+def xdg_dir(variable: str, default: str) -> Path:
+    raw = os.environ.get(variable)
+    return Path(raw) if raw else Path.home() / default
 
 
-def install_exe() -> Path:
-    return install_dir() / f"{APP_NAME}.exe"
+def data_dir() -> Path:
+    if is_windows():
+        return local_appdata() / APP_NAME
+    return xdg_dir("XDG_DATA_HOME", ".local/share") / APP_NAME
 
 
 def game_logs_dir() -> Path:
-    return local_appdata() / "OPP" / "Saved" / "Logs"
+    if is_windows():
+        return local_appdata() / "OPP" / "Saved" / "Logs"
+    return proton.logs_dir(Path.home())
 
 
 def icon_path() -> Path:

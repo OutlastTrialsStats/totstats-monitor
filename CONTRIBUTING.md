@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping out. This is a small Windows-only app; the setup is correspondingly small.
+Thanks for helping out. This is a small app for Windows and Linux; the setup is correspondingly small.
 
 ## Development setup
 
@@ -14,7 +14,7 @@ py -m venv .venv
 
 ## Running it without the game
 
-Starting the app for real installs it into `%LOCALAPPDATA%` and sends data to the live API.
+Starting the app for real sends data to the live API.
 Use `--dry-run` instead:
 
 ```powershell
@@ -26,16 +26,15 @@ Copy-Item "$env:LOCALAPPDATA\OPP\Saved\Logs\*.log" C:\temp\logs
 ```
 
 A dry run reads the given directory whether or not the game is running, keeps its settings in
-memory and touches neither the registry nor the installation. It replays the whole file on
+memory and touches neither the registry nor the autostart entry. It replays the whole file on
 startup, so a recorded session runs end to end.
 
 | Flag | Effect |
 |---|---|
 | `--dry-run` | Read logs without the game, send nothing, touch nothing |
-| `--logs-dir PATH` | Read from PATH instead of `%LOCALAPPDATA%\OPP\Saved\Logs` |
+| `--logs-dir PATH` | Read from PATH instead of the game's own log folder (`%LOCALAPPDATA%\OPP\Saved\Logs` on Windows, the Steam Proton prefix on Linux) |
 | `--presence-connect` | Talk to Discord for real during a dry run, instead of only logging the status |
 | `--verbose` | Log at debug level, including replayed lines |
-| `--no-install` | Do not copy the executable into `%LOCALAPPDATA%` and relaunch |
 | `--silent` | No console output; this is what the autostart entry uses |
 
 ## Before opening a pull request
@@ -46,11 +45,16 @@ startup, so a recorded session runs end to end.
 
 CI runs the same command and the build job depends on it.
 
-To produce the executable:
+To produce the release files:
 
 ```powershell
 .venv\Scripts\python build.py
 ```
+
+On Windows this builds the program folder in `dist/TOTStatsMonitor` and, if
+[Inno Setup 6](https://jrsoftware.org/isinfo.php) is installed, the installer
+`dist/TOTStatsMonitor-Setup.exe` from `installer/TOTStatsMonitor.iss`. On Linux it builds the single
+file `dist/TOTStatsMonitor-linux-x86_64`.
 
 `build.py` refuses to build if the version in `src/totstats/__init__.py` disagrees with
 `.release-please-manifest.json`. Both are updated by `release-please`; do not bump either by hand.
