@@ -79,5 +79,5 @@ jobs:
         with:
           webhook-url: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
           product: TOTStats Monitor
-          url: https://github.com/OutlastTrialsStats/totstats-monitor/releases/latest
+          url: https://outlasttrialsstats.com/projects/monitor
           tag: ${{ needs.release-please.outputs.tag_name }}
