@@ -42,7 +42,7 @@ class ConsoleWindow:
             bg=BACKGROUND,
             fg=FOREGROUND,
             insertbackground=FOREGROUND,
-            font=("Consolas", 10),
+            font=("Consolas", 10) if paths.is_windows() else "TkFixedFont",
             state=tk.DISABLED,
             wrap=tk.WORD,
             borderwidth=0,

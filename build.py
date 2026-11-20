@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -8,6 +9,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 VERSION_FILE = ROOT / "src" / "totstats" / "__init__.py"
 MANIFEST_FILE = ROOT / ".release-please-manifest.json"
+WINDOWS = sys.platform == "win32"
+INSTALLER_SCRIPT = ROOT / "installer" / "TOTStatsMonitor.iss"
+ISCC_CANDIDATES = (
+    r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+    r"C:\Program Files\Inno Setup 6\ISCC.exe",
+    r"%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe",
+)
 
 
 def get_version() -> str:
@@ -50,29 +58,77 @@ def write_version_info(version: str) -> None:
   ])""")
 
 
+def pyinstaller_args() -> list[str]:
+    common = [
+        sys.executable, "-m", "PyInstaller",
+        "--noconfirm",
+        "--noupx",
+        "--add-data", f"assets{os.pathsep}assets",
+        "--paths", "src",
+    ]
+    if WINDOWS:
+        # A folder, not --onefile: a onefile exe unpacks itself into %TEMP% on every start,
+        # which is exactly the behaviour antivirus heuristics treat as a dropper.
+        return [
+            *common,
+            "--onedir",
+            "--noconsole",
+            "--icon", "assets/icon.ico",
+            "--name", "TOTStatsMonitor",
+            "--version-file", "version_info.txt",
+            "--hidden-import", "pystray._win32",
+            "src/totstats/__main__.py",
+        ]
+    return [
+        *common,
+        "--onefile",
+        "--name", "TOTStatsMonitor-linux-x86_64",
+        "--hidden-import", "pystray._xorg",
+        "src/totstats/__main__.py",
+    ]
+
+
+def find_iscc() -> str | None:
+    found = shutil.which("iscc")
+    if found:
+        return found
+    for candidate in ISCC_CANDIDATES:
+        path = os.path.expandvars(candidate)
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def build_installer(version: str) -> None:
+    iscc = find_iscc()
+    if iscc is None:
+        if os.environ.get("CI"):
+            raise SystemExit("Inno Setup (ISCC.exe) not found")
+        print("\nInno Setup not found, skipping the installer. The program folder is dist/TOTStatsMonitor.")
+        return
+    result = subprocess.run([iscc, f"/DAppVersion={version}", str(INSTALLER_SCRIPT)])
+    if result.returncode != 0:
+        print(f"\nInstaller build failed with exit code {result.returncode}")
+        raise SystemExit(result.returncode)
+    print("\nInstaller built: dist/TOTStatsMonitor-Setup.exe")
+
+
 def build(version: str) -> None:
     print(f"Building TOTStatsMonitor v{version}...")
-    result = subprocess.run([
-        sys.executable, "-m", "PyInstaller",
-        "--onefile",
-        "--noconsole",
-        "--icon", "assets/icon.ico",
-        "--add-data", "assets;assets",
-        "--name", "TOTStatsMonitor",
-        "--version-file", "version_info.txt",
-        "--paths", "src",
-        "--hidden-import", "pystray._win32",
-        "src/totstats/__main__.py",
-    ])
+    result = subprocess.run(pyinstaller_args())
     if result.returncode != 0:
         print(f"\nBuild failed with exit code {result.returncode}")
         raise SystemExit(result.returncode)
-    print("\nBuild successful! Output: dist/TOTStatsMonitor.exe")
+    if WINDOWS:
+        build_installer(version)
+    else:
+        print("\nBuild successful! Output: dist/TOTStatsMonitor-linux-x86_64")
 
 
 def main() -> None:
     version = get_version()
-    write_version_info(version)
+    if WINDOWS:
+        write_version_info(version)
     github_output = os.environ.get("GITHUB_OUTPUT")
     if github_output:
         with open(github_output, "a") as handle:

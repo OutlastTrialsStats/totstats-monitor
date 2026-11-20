@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import psutil
 
+from totstats.shared import paths
+
 MARKER = "TOTClient"
 
 
@@ -37,9 +39,15 @@ class GameProcessWatcher:
             return False
 
     def _find(self) -> psutil.Process | None:
-        for process in psutil.process_iter(["name", "exe"]):
-            name = process.info.get("name") or ""
-            exe = process.info.get("exe") or ""
-            if MARKER in name or MARKER in exe:
+        # Under Proton the process is the Wine loader and Linux truncates its name to 15
+        # characters, so the first argument is the other place the game's name shows up. Only
+        # that one: later arguments also hold the launcher and tools that merely mention the game.
+        fields = ["name", "exe"] if paths.is_windows() else ["name", "cmdline"]
+        for process in psutil.process_iter(fields):
+            info = process.info
+            if MARKER in (info.get("name") or "") or MARKER in (info.get("exe") or ""):
+                return process
+            cmdline = info.get("cmdline")
+            if cmdline and MARKER in cmdline[0]:
                 return process
         return None

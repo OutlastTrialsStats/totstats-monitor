@@ -61,6 +61,9 @@ class LogTailer:
         self._subs.append(_Subscription(name, sink, tuple(needles), on_rotate, on_replay_complete))
         self._needles = tuple(dict.fromkeys(needle for sub in self._subs for needle in sub.needles))
 
+    def set_logs_dir(self, logs_dir: Path) -> None:
+        self._logs_dir = logs_dir
+
     def reset(self) -> None:
         self.path: Path | None = None
         self.replaying = False
