@@ -1,0 +1,27 @@
+name: Announce
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, e.g. v1.2.3
+        required: true
+      dry-run:
+        description: Only show a preview in the job summary
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: OutlastTrialsStats/release-announcer@v1
+        with:
+          webhook-url: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+          product: TOTStats Monitor
+          url: https://outlasttrialsstats.com/projects/monitor
+          tag: ${{ inputs.tag }}
+          dry-run: ${{ inputs.dry-run }}
