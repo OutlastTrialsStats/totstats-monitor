@@ -66,3 +66,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release edit ${{ needs.release-please.outputs.tag_name }} --draft=false --latest
+
+  announce:
+    needs: [release-please, publish]
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: OutlastTrialsStats/release-announcer@v1
+        with:
+          webhook-url: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+          product: TOTStats Monitor
+          url: https://github.com/OutlastTrialsStats/totstats-monitor/releases/latest
+          tag: ${{ needs.release-please.outputs.tag_name }}
