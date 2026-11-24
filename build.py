@@ -64,6 +64,7 @@ def pyinstaller_args() -> list[str]:
         "--noconfirm",
         "--noupx",
         "--add-data", f"assets{os.pathsep}assets",
+        "--add-data", f"locales{os.pathsep}locales",
         "--paths", "src",
     ]
     if WINDOWS:

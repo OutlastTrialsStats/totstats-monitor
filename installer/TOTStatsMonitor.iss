@@ -1,4 +1,4 @@
-; Built by build.py: iscc /DAppVersion=<version> installer\TOTStatsMonitor.iss
+﻿; Built by build.py: iscc /DAppVersion=<version> installer\TOTStatsMonitor.iss
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
@@ -26,11 +26,35 @@ UninstallDisplayIcon={app}\{#AppExe}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+WizardSmallImageFile=wizard-small.bmp
 VersionInfoVersion={#AppVersion}
+; Ask only when the Windows UI language matches none of the languages below.
+ShowLanguageDialog=auto
+UsePreviousLanguage=yes
+
+[Languages]
+Name: "en"; MessagesFile: "compiler:Default.isl"
+Name: "de"; MessagesFile: "compiler:Languages\German.isl"
+Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
+Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
+
+[CustomMessages]
+en.AutostartTask=Start %1 when I sign in to Windows
+en.StartupGroup=Startup:
+en.LaunchNow=Start %1 now
+de.AutostartTask=%1 bei der Anmeldung bei Windows starten
+de.StartupGroup=Autostart:
+de.LaunchNow=%1 jetzt starten
+fr.AutostartTask=Démarrer %1 à l'ouverture de session Windows
+fr.StartupGroup=Démarrage :
+fr.LaunchNow=Démarrer %1 maintenant
+es.AutostartTask=Iniciar %1 al iniciar sesión en Windows
+es.StartupGroup=Inicio:
+es.LaunchNow=Iniciar %1 ahora
 
 [Tasks]
 ; Ticked by default. Autostart is the user's decision, made here, and nowhere else.
-Name: "autostart"; Description: "Start {#AppName} when I sign in to Windows"; GroupDescription: "Startup:"
+Name: "autostart"; Description: "{cm:AutostartTask,{#AppName}}"; GroupDescription: "{cm:StartupGroup}"
 
 [Files]
 Source: "..\dist\{#AppName}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -43,7 +67,7 @@ Root: HKCU; Subkey: "{#RunKey}"; ValueType: string; ValueName: "{#AppName}"; \
   ValueData: """{app}\{#AppExe}"" --silent"; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
-Filename: "{app}\{#AppExe}"; Parameters: "--silent"; Description: "Start {#AppName} now"; \
+Filename: "{app}\{#AppExe}"; Parameters: "--silent"; Description: "{cm:LaunchNow,{#AppName}}"; \
   Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]

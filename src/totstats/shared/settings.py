@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 from totstats.shared.applog import AppLog
@@ -16,9 +16,47 @@ class Features:
 
 
 @dataclass
+class PresenceOptions:
+    show_trial_image: bool = True
+    show_program: bool = True
+    show_location: bool = True
+    show_difficulty: bool = True
+    show_party: bool = True
+    show_timer: bool = True
+    show_role_icon: bool = True
+    show_stats_button: bool = True
+    # Empty means the built-in text of the chosen language.
+    details_template: str = ""
+    state_template: str = ""
+
+
+MAX_TEMPLATE = 128
+
+
+def clean_template(text: str) -> str:
+    return text.strip()[:MAX_TEMPLATE]
+
+
+@dataclass
 class Settings:
     autostart_asked: bool = False
+    language: str = "auto"
     features: Features = field(default_factory=Features)
+    presence: PresenceOptions = field(default_factory=PresenceOptions)
+
+
+def _parse_presence(raw: object) -> PresenceOptions:
+    options = PresenceOptions()
+    if not isinstance(raw, dict):
+        return options
+    for item in fields(PresenceOptions):
+        value = raw.get(item.name)
+        default = getattr(options, item.name)
+        if isinstance(default, bool) and isinstance(value, bool):
+            setattr(options, item.name, value)
+        elif isinstance(default, str) and isinstance(value, str):
+            setattr(options, item.name, clean_template(value))
+    return options
 
 
 def _parse(raw: object) -> Settings:
@@ -27,12 +65,16 @@ def _parse(raw: object) -> Settings:
         return settings
     if isinstance(raw.get("autostart_asked"), bool):
         settings.autostart_asked = raw["autostart_asked"]
+    language = raw.get("language")
+    if isinstance(language, str) and 0 < len(language) <= 16:
+        settings.language = language
     features = raw.get("features")
     if isinstance(features, dict):
         if isinstance(features.get("contribute"), bool):
             settings.features.contribute = features["contribute"]
         if isinstance(features.get("presence"), bool):
             settings.features.presence = features["presence"]
+    settings.presence = _parse_presence(raw.get("presence"))
     return settings
 
 

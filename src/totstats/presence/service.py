@@ -12,8 +12,10 @@ from totstats.presence.parser import MapLoad, PresenceSample, parse_event
 from totstats.presence.render import Payload, render
 from totstats.presence.state import GameState, StateMachine
 from totstats.shared.applog import AppLog
+from totstats.shared.i18n import Translator
 from totstats.shared.log_tail import LogLine
 from totstats.shared.profile_id import OwnProfileIdResolver
+from totstats.shared.settings import PresenceOptions
 
 MIN_UPDATE_INTERVAL = 15.0
 
@@ -81,6 +83,8 @@ class PresenceService:
         self._held = False
         self._changed_at = 0.0
         self._retired = False
+
+        self._appearance: tuple[PresenceOptions | None, Translator | None] = (None, None)
 
         self.enabled = True
         self.game_running = True
@@ -178,6 +182,11 @@ class PresenceService:
         self._catalog = catalog
         self._wake.set()
 
+    def set_appearance(self, options: PresenceOptions, tr: Translator) -> None:
+        # Swapped as one tuple so the worker never renders with a mismatched pair.
+        self._appearance = (options, tr)
+        self._wake.set()
+
     def on_game_started(self, started_at: float | None = None) -> None:
         self.game_running = True
         self._session_start = started_at or time.time()
@@ -245,7 +254,8 @@ class PresenceService:
         if self._session_start is None:
             self._session_start = time.time()
 
-        payload = render(self._state, self._catalog, self._ids.profile_id, self._session_start)
+        options, tr = self._appearance
+        payload = render(self._state, self._catalog, self._ids.profile_id, self._session_start, options, tr)
         if payload == self._last_sent:
             return IDLE_WAIT
         if payload != self._pending:

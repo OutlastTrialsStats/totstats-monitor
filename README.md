@@ -1,4 +1,7 @@
-# TOTStatsMonitor
+<p align="center">
+  <img src="doc/banner.png" alt="TOTStatsMonitor" width="100%">
+</p>
+
 
 A small companion app for [outlasttrialsstats.com](https://outlasttrialsstats.com). It sits in
 your Windows system tray, watches The Outlast Trials' own log file while you play, and turns that
@@ -84,7 +87,9 @@ the `^` arrow). Right-click it for the menu:
 | **Status** | Whether it is monitoring, waiting for the game, or paused |
 | **Contribute player data** | Turns contributing on or off immediately, without uninstalling |
 | **Discord Rich Presence** | Shows or hides what you are playing on your Discord profile |
+| **Customize Discord status…** | Picks what your Discord status shows and lets you write your own text for it |
 | **Start with Windows** (**Start at login** on Linux) | Adds or removes the autostart entry |
+| **Language** | Switches the app's language; **System default** follows your system language |
 | **Console** | A live log window: detected players, API responses, errors |
 | **Uninstall** | Shuts down and starts the uninstaller (Linux: deletes the data folder, you delete the file) |
 | **Exit** | Stops the app without uninstalling |
@@ -93,9 +98,22 @@ Everything the app keeps lives in `%LOCALAPPDATA%\TOTStatsMonitor\`: `settings.j
 `monitor.log`, and the cached trial list. Uninstall deletes that folder and the autostart entry
 and leaves nothing else behind.
 
+## Languages
+
+The app comes in English, German, French and Spanish and picks your system language by default.
+To choose another one, open **Language** in the tray menu.
+
+Translations are plain JSON files, one per language. To add or improve one for everybody, put it in
+`locales/<code>.json` in this repository and open a pull request (see
+[CONTRIBUTING.md](doc/CONTRIBUTING.md#adding-a-translation)). For yourself only, drop the file into the
+`locales` folder in the app's data folder — `%LOCALAPPDATA%\TOTStatsMonitor\locales\` on Windows,
+`~/.local/share/TOTStatsMonitor/locales/` on Linux. A file there with the same code as a built-in
+language overrides only the texts it contains. Anything missing from a translation is shown in
+English.
+
 ## Contributing
 
-Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, and
+Pull requests are welcome. See [CONTRIBUTING.md](doc/CONTRIBUTING.md) for the development setup, and
 [doc/commit-convention.md](doc/commit-convention.md) for the commit message format — commit
 messages drive the version bump and the changelog through `release-please`.
 

@@ -42,6 +42,21 @@ def game_logs_dir() -> Path:
     return proton.logs_dir(Path.home())
 
 
+def resource_root() -> Path:
+    return Path(getattr(sys, "_MEIPASS", None) or Path(__file__).resolve().parents[3])
+
+
 def icon_path() -> Path:
-    root = getattr(sys, "_MEIPASS", None) or Path(__file__).resolve().parents[3]
-    return Path(root) / "assets" / "icon.ico"
+    return resource_root() / "assets" / "icon.ico"
+
+
+def logo_path() -> Path:
+    return resource_root() / "assets" / "logo.png"
+
+
+def locales_dir() -> Path:
+    return resource_root() / "locales"
+
+
+def user_locales_dir() -> Path:
+    return data_dir() / "locales"

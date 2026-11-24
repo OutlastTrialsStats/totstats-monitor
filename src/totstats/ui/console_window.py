@@ -2,19 +2,23 @@ from __future__ import annotations
 
 import contextlib
 import tkinter as tk
+from collections.abc import Callable
 
 from totstats import APP_NAME
 from totstats.shared import paths
 from totstats.shared.applog import AppLog
+from totstats.shared.i18n import Translator
+from totstats.ui import window_icon
 
 BACKGROUND = "#1e1e1e"
 FOREGROUND = "#cccccc"
 
 
 class ConsoleWindow:
-    def __init__(self, root: tk.Tk, log: AppLog) -> None:
+    def __init__(self, root: tk.Tk, log: AppLog, tr: Callable[[], Translator]) -> None:
         self._root = root
         self._log = log
+        self._tr = tr
         self._window: tk.Toplevel | None = None
         self._text: tk.Text | None = None
         self._last_seq = 0
@@ -30,12 +34,11 @@ class ConsoleWindow:
                 self._window = None
 
         window = tk.Toplevel(self._root)
-        window.title(f"{APP_NAME} - Console")
+        window.title(f"{APP_NAME} - {self._tr().t('console.title')}")
         window.geometry("700x400")
         window.protocol("WM_DELETE_WINDOW", self.close)
         window.configure(bg=BACKGROUND)
-        with contextlib.suppress(tk.TclError):
-            window.iconbitmap(str(paths.icon_path()))
+        window_icon.apply(window)
 
         text = tk.Text(
             window,

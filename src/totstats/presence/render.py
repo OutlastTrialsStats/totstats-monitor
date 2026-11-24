@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from string import Formatter
 
 from totstats.presence.catalog import SITE, Catalog, TrialInfo, image
 from totstats.presence.state import Activity, GameState, InvasionRole
+from totstats.shared.i18n import Translator, english
+from totstats.shared.settings import PresenceOptions
 
 MAX_TEXT = 128
 MIN_TEXT = 2
@@ -14,6 +17,25 @@ GAME_NAME = "The Outlast Trials"
 TRIAL_ACTIVITIES = (Activity.PREPARING, Activity.TRIAL, Activity.CHAIN)
 
 ROLE_ICONS = {InvasionRole.REAGENT: "icon_reagent", InvasionRole.IMPOSTER: "icon_invader"}
+
+PLACEHOLDERS = ("trial", "location", "program", "difficulty", "step", "role", "activity", "party")
+
+MAX_BUTTON = 32
+
+DEFAULT_OPTIONS = PresenceOptions()
+
+# Outside a trial: (top line, bottom line) per activity.
+OUTSIDE = {
+    Activity.MAIN_MENU: ("presence.main_menu", "presence.idle"),
+    Activity.SLEEP_ROOM: ("presence.sleep_room", "presence.idle"),
+    Activity.MATCHMAKING: ("presence.sleep_room", "presence.looking_for_group"),
+    Activity.RETURNING: ("presence.sleep_room", "presence.returning"),
+    Activity.PREPARING: ("presence.sleep_room", "presence.preparing_trial"),
+}
+
+
+def role_name(role: InvasionRole, tr: Translator) -> str:
+    return tr.t(f"presence.role_{role.value}")
 
 
 @dataclass(frozen=True)
@@ -56,81 +78,132 @@ def _clip(text: str) -> str:
     return text.strip().ljust(MIN_TEXT)[:MAX_TEXT]
 
 
+class _Blank(dict):
+    def __missing__(self, key: str) -> str:
+        return ""
+
+
+def _tidy(text: str) -> str:
+    pieces = (" ".join(piece.split()) for piece in text.split(SEPARATOR.strip()))
+    return SEPARATOR.join(piece for piece in pieces if piece)
+
+
+def _fill(template: str, values: dict[str, str], default: str) -> str:
+    """A user's template for one line; anything broken or empty falls back to the default text."""
+    if not template.strip():
+        return default
+    try:
+        fields = list(Formatter().parse(template))
+    except ValueError:
+        return default
+    # Only bare names: no positional fields, attribute or index access, conversions or format specs,
+    # so a template can neither reach into objects nor pad a line to gigabytes.
+    if any(name is not None and (not name.isidentifier() or conv or spec) for _, name, spec, conv in fields):
+        return default
+    return _tidy(template.format_map(_Blank(values))) or default
+
+
 def render(
     state: GameState,
     catalog: Catalog,
     profile_id: str | None = None,
     session_start: float | None = None,
+    options: PresenceOptions | None = None,
+    tr: Translator | None = None,
 ) -> Payload | None:
     if state.activity in (Activity.UNKNOWN, Activity.OFFLINE):
         return None
+    options = options or DEFAULT_OPTIONS
+    tr = tr or english()
 
+    # Hidden elements are blanked here, once, so nothing below can leak them.
     trial = catalog.trial(state.trial_id) if state.activity in TRIAL_ACTIVITIES else None
-    details, description = _describe(
-        state, trial, catalog.program_name(state.program_id), catalog.difficulty_name(state.difficulty)
-    )
-
+    location = trial.location if trial is not None and options.show_location else None
+    program = catalog.program_name(state.program_id) if options.show_program else None
+    difficulty = catalog.difficulty_name(state.difficulty) if options.show_difficulty else None
     role = state.invasion_role
-    small_image = image(ROLE_ICONS[role]) if role else None
-    small_text = f"Invasion — {role.value.title()}" if role else None
 
     party_id, party_size = None, None
-    if state.party_size and state.party_size >= 2 and not state.in_invasion:
+    if options.show_party and state.party_size and state.party_size >= 2 and not state.in_invasion:
         party_id = state.party_key or "party"
         party_size = (state.party_size, max(state.party_max, state.party_size))
 
-    start = state.trial_started_at if state.in_trial else session_start
+    if state.activity in OUTSIDE and (state.activity is not Activity.PREPARING or trial is None):
+        top, bottom = OUTSIDE[state.activity]
+        details, description = tr.t(top), tr.t(bottom)
+    else:
+        details, description = _trial_lines(state, trial, location, program, difficulty, tr)
+        values = {
+            "trial": trial.name if trial is not None else "",
+            "location": location or "",
+            "program": program or "",
+            "difficulty": difficulty or "",
+            "step": str(state.chain_step) if state.activity is Activity.CHAIN and state.chain_step else "",
+            "role": role_name(role, tr) if role else "",
+            "activity": details,
+            "party": f"{party_size[0]}/{party_size[1]}" if party_size else "",
+        }
+        details = _fill(options.details_template, values, details)
+        description = _fill(options.state_template, values, description)
+
+    small_image, small_text = None, None
+    if role and options.show_role_icon:
+        small_image = image(ROLE_ICONS[role])
+        small_text = _clip(tr.t("presence.invasion_role", role=role_name(role, tr)))
+
+    start = None
+    if options.show_timer:
+        start = state.trial_started_at if state.in_trial else session_start
 
     large_text = GAME_NAME
     if trial is not None:
-        large_text = f"{trial.name} — {trial.location}" if trial.location else trial.name
+        large_text = f"{trial.name} — {location}" if location else trial.name
+
+    buttons = ()
+    if profile_id and options.show_stats_button:
+        label = tr.t("presence.button_stats").strip()[:MAX_BUTTON]
+        buttons = ((label, f"{SITE}/profile/{profile_id}"),)
 
     return Payload(
         details=_clip(details),
         state=_clip(description),
-        large_image=image(trial.banner if trial else None),
+        large_image=image(trial.banner if trial and options.show_trial_image else None),
         large_text=_clip(large_text),
         small_image=small_image,
         small_text=small_text,
         party_id=party_id,
         party_size=party_size,
         start=int(start) if start else None,
-        buttons=(("View Stats", f"{SITE}/profile/{profile_id}"),) if profile_id else (),
+        buttons=buttons,
     )
 
 
-def _describe(
-    state: GameState, trial: TrialInfo | None, program: str | None, difficulty: str | None
+def _trial_lines(
+    state: GameState,
+    trial: TrialInfo | None,
+    location: str | None,
+    program: str | None,
+    difficulty: str | None,
+    tr: Translator,
 ) -> tuple[str, str]:
-    if state.activity is Activity.MAIN_MENU:
-        return "Main Menu", "Idle"
-    if state.activity is Activity.MATCHMAKING:
-        return "Sleep Room", "Looking for a group"
-    if state.activity is Activity.RETURNING:
-        return "Sleep Room", "Returning from a Trial"
-    if state.activity is Activity.SLEEP_ROOM:
-        return "Sleep Room", "Idle"
-    if state.activity is Activity.PREPARING and trial is None:
-        return "Sleep Room", "Preparing a Trial"
-
     parts = []
     if state.activity is Activity.CHAIN:
-        headline = program or "Escalation"
+        headline = program or tr.t("presence.escalation")
         if trial is not None:
             parts.append(trial.name)
         if state.chain_step:
-            parts.append(f"Step {state.chain_step}")
+            parts.append(tr.t("presence.step", step=state.chain_step))
     else:
-        headline = trial.name if trial is not None else (program or "In a Trial")
+        headline = trial.name if trial is not None else (program or tr.t("presence.in_trial"))
         if trial is not None and program:
             parts.append(program)
-        if trial is not None and trial.location:
-            parts.append(trial.location)
+        if location:
+            parts.append(location)
 
     if state.invasion_role is not None:
-        parts = [f"Invasion{SEPARATOR}{state.invasion_role.value.title()}"]
+        parts = [f"{tr.t('presence.invasion')}{SEPARATOR}{role_name(state.invasion_role, tr)}"]
     if state.activity is Activity.PREPARING:
-        parts.insert(0, "Preparing")
+        parts.insert(0, tr.t("presence.preparing"))
     if difficulty:
         parts.append(difficulty)
 
