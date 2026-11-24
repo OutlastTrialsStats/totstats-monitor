@@ -1,5 +1,25 @@
 # Changelog
 
+## [3.0.0](https://github.com/OutlastTrialsStats/totstats-monitor/compare/v2.1.1...v3.0.0) (2026-11-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* the Windows download is now the installer TOTStatsMonitor-Setup.exe instead of TOTStatsMonitor.exe.
+
+### Features
+
+* add languages, customizable Discord status and new logo ([da1ec6b](https://github.com/OutlastTrialsStats/totstats-monitor/commit/da1ec6bd716a319fd18b7e3af7b4272356c4bf85))
+* ship a Windows installer and a Linux build ([4297b0f](https://github.com/OutlastTrialsStats/totstats-monitor/commit/4297b0f9d7e049698adf45d847b799928d990847))
+
+
+### Dependencies
+
+* bump pillow from 12.3.0 to 13.0.0 ([28f38da](https://github.com/OutlastTrialsStats/totstats-monitor/commit/28f38dae037c1397b15631e99025254bca4d9b85))
+* bump pyinstaller from 6.21.0 to 6.22.3 ([cd52fc7](https://github.com/OutlastTrialsStats/totstats-monitor/commit/cd52fc7046a534d00ce9d1a6f7e6c220dec477bd))
+* bump pytest from 9.1.1 to 9.2.0 ([0c27c59](https://github.com/OutlastTrialsStats/totstats-monitor/commit/0c27c5900cf3ebf55178cd62b8083bd3e2e7b0ad))
+* bump ruff from 0.16.1 to 0.17.5 ([2d3c745](https://github.com/OutlastTrialsStats/totstats-monitor/commit/2d3c7453bdfe802da02f327f0b28d21bd65dfbf0))
+
 ## [2.1.1](https://github.com/OutlastTrialsStats/totstats-monitor/compare/v2.1.0...v2.1.1) (2026-11-01)
 
 
