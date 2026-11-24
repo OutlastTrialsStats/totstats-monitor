@@ -20,11 +20,13 @@ from totstats.shared import autostart, paths, uninstaller
 from totstats.shared.api import api_base_override
 from totstats.shared.applog import AppLog
 from totstats.shared.game_process import GameProcessWatcher
+from totstats.shared.i18n import Locales
 from totstats.shared.log_tail import LogTailer
 from totstats.shared.profile_id import OwnProfileIdResolver
-from totstats.shared.settings import SettingsStore
+from totstats.shared.settings import PresenceOptions, SettingsStore
 from totstats.shared.ui_queue import UiQueue
 from totstats.ui.console_window import ConsoleWindow
+from totstats.ui.presence_window import PresenceWindow
 
 TAIL_INTERVAL = 0.25
 PROCESS_INTERVAL = 3.0
@@ -50,6 +52,9 @@ class App:
 
         self.store = SettingsStore(settings_file, self.log)
         self.settings = self.store.load()
+        user_locales = None if data_dir is None else paths.user_locales_dir()
+        self.locales = Locales([paths.locales_dir(), user_locales], self.log)
+        self.tr = self.locales.translator(self.settings.language)
         self.ui = UiQueue(self.log)
 
         ids = OwnProfileIdResolver()
@@ -74,6 +79,7 @@ class App:
             discord, load_catalog(self.log, data_dir), ids, self.log, live_api=self._live_api
         )
         self.presence.enabled = self.settings.features.presence
+        self._sync_presence()
         self._catalog_sync = None
         if data_dir is not None:
             self._catalog_sync = CatalogSync(self.presence.set_catalog, self.log, self._stop, data_dir)
@@ -87,20 +93,21 @@ class App:
 
     def status_text(self) -> str:
         if self.args.dry_run:
-            return "Dry run"
+            return self.tr.t("status.dry_run")
         if not (self.settings.features.contribute or self.settings.features.presence):
-            return "Paused"
-        return "Monitoring" if self._game.running else "Waiting for game"
+            return self.tr.t("status.paused")
+        return self.tr.t("status.monitoring" if self._game.running else "status.waiting")
 
     def run(self) -> int:
-        self.log.info(f"{APP_NAME} {__version__} started")
+        self.log.info(f"{APP_NAME} {__version__} started, language {self.tr.code}")
         if self.args.dry_run:
             self.log.info("Dry run: reading logs without the game, nothing is sent")
 
         self._root = tk.Tk()
         self._root.withdraw()
         self._root.tk.call("tk", "scaling", self._root.winfo_fpixels("1i") / 72.0)
-        self._console = ConsoleWindow(self._root, self.log)
+        self._console = ConsoleWindow(self._root, self.log, lambda: self.tr)
+        self._presence_window = PresenceWindow(self._root, self)
         self._tray = self._create_tray()
 
         self.contribute.start()
@@ -126,6 +133,30 @@ class App:
     def open_console(self) -> None:
         self._console.open()
 
+    def open_presence_settings(self) -> None:
+        self._presence_window.open()
+
+    def apply_presence_options(self, options: PresenceOptions) -> None:
+        self.settings.presence = options
+        self.store.save()
+        self._sync_presence()
+        self.log.info("Discord status layout saved")
+
+    def set_language(self, language: str) -> None:
+        self.settings.language = language
+        self.store.save()
+        self.tr = self.locales.translator(language)
+        self._sync_presence()
+        self.log.info(f"Language set to {self.tr.code}")
+        self._update_tray()
+        if self._presence_window.is_open:
+            # Rebuilt so its labels and preview follow the new language.
+            self._presence_window.close()
+            self._presence_window.open()
+
+    def _sync_presence(self) -> None:
+        self.presence.set_appearance(self.settings.presence, self.tr)
+
     def toggle_autostart(self) -> None:
         if self.args.dry_run:
             self.log.info("Dry run: autostart unchanged")
@@ -137,6 +168,7 @@ class App:
             self.log.info("Autostart enabled")
         else:
             self.log.warning("Autostart entry could not be written")
+        self._update_tray()
 
     def toggle_contribute(self) -> None:
         enabled = not self.settings.features.contribute
@@ -167,7 +199,7 @@ class App:
             else:
                 self.log.warning("No uninstaller found next to the program, nothing was removed")
             return
-        if not self._confirm("Remove the autostart entry and all settings, then exit?"):
+        if not self._confirm(self.tr.t("dialog.uninstall")):
             return
         self._uninstalling = True
         if autostart.disable():
@@ -185,9 +217,9 @@ class App:
             self.ui.post(self.open_console)
             return None
 
-    def _update_tray(self) -> None:
+    def _update_tray(self, menu: bool = True) -> None:
         if self._tray is not None:
-            self._tray.update()
+            self._tray.update(menu)
 
     def _run_tray(self) -> None:
         try:
@@ -207,11 +239,7 @@ class App:
             return
         self.settings.autostart_asked = True
         self.store.save()
-        question = (
-            "Start TOTStatsMonitor automatically when you log in?\n\n"
-            "You can change this any time in the tray menu."
-        )
-        if self._confirm(question) and not autostart.enable():
+        if self._confirm(self.tr.t("dialog.autostart")) and not autostart.enable():
             self.log.warning("Autostart entry could not be written")
 
     def _main_loop(self) -> None:
@@ -252,7 +280,8 @@ class App:
         else:
             self.log.info("Game closed, monitoring stopped")
             self.presence.on_game_stopped()
-        self._update_tray()
+        # Title only: this runs on the watcher thread, which must not rebuild a menu that may be open.
+        self._update_tray(menu=False)
 
     def _shutdown(self, watcher: threading.Thread) -> None:
         self._stop.set()
@@ -267,6 +296,7 @@ class App:
         if self._tray is not None:
             self._tray.stop()
         self._console.close()
+        self._presence_window.close()
         with contextlib.suppress(tk.TclError):
             self._root.destroy()
 

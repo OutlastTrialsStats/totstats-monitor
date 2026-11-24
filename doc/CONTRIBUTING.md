@@ -84,8 +84,31 @@ A feature is a package under `src/totstats/` with a service class exposing `INTE
 `on_line(line)` and `on_rotate()`; `app.py` subscribes it to the tailer. Sinks run on the watcher
 thread and must not block — enqueue and return.
 
+## Adding a translation
+
+Copy `locales/en.json` to `locales/<code>.json`, where `<code>` is the two-letter language code
+(`it`, `pl`, …, or `pt-BR` for a regional variant), set `_meta.name` to the language's own name and
+translate the values. English is the reference: every key in `en.json` must also be in your file.
+
+- Leave the keys alone and keep placeholders such as `{status}` or `{step}` exactly as they are.
+- Leave **Discord Rich Presence** and **TOTStatsMonitor** untranslated.
+- For game terms (Sleep Room, Trial, Escalation, …) use the words the game itself uses in that
+  language.
+
+`tests/test_i18n.py` checks that every file has the same keys and placeholders as `en.json`. To try
+a translation without building, start the app from source and pick it under **Language** in the
+tray menu. The new language appears there automatically.
+
+## Logo and banner
+
+The source files are the SVGs in `doc/branding/`. Everything the app, the installer and the README
+use is rendered from them: run `python tools/make_assets.py` after changing one. It needs a Chrome,
+Chromium or Edge installation to render the SVGs and writes `assets/icon.ico`, `assets/logo.png`,
+`installer/wizard-small.bmp`, `doc/banner.png` and `doc/social-preview.png`. The last one is the
+GitHub social preview and is uploaded by hand under the repository settings.
+
 ## Commit messages
 
 [Conventional Commits](https://www.conventionalcommits.org/), described in
-[doc/commit-convention.md](doc/commit-convention.md). They drive the version bump and the
+[doc/commit-convention.md](commit-convention.md). They drive the version bump and the
 changelog, so the type you pick has consequences.
