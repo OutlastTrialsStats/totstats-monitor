@@ -5,11 +5,10 @@
 
 ### ⚠ BREAKING CHANGES
 
-* the Windows download is now TOTStatsMonitor-Setup.exe.
+* the Windows download is now the installer TOTStatsMonitor-Setup.exe instead of TOTStatsMonitor.exe.
 
 ### Features
 
-* add languages, customizable Discord status and new logo ([90e4e61](https://github.com/OutlastTrialsStats/totstats-monitor/commit/90e4e6192bf77860374cb6fcfe7604abe97ee8d7))
 * add languages, customizable Discord status and new logo ([da1ec6b](https://github.com/OutlastTrialsStats/totstats-monitor/commit/da1ec6bd716a319fd18b7e3af7b4272356c4bf85))
 * ship a Windows installer and a Linux build ([4297b0f](https://github.com/OutlastTrialsStats/totstats-monitor/commit/4297b0f9d7e049698adf45d847b799928d990847))
 
