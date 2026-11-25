@@ -58,6 +58,17 @@ def test_discord_only_labels_come_from_the_app():
     assert catalog.trial("DRS_MT01").name == "Kidnap the Mistress"
 
 
+def test_known_programs_have_stable_translation_keys():
+    catalog = parse_catalog(SITE_CATALOG)
+    assert catalog.program("programCoreFP")[0] == "core"
+    assert catalog.program("programBloodDonations")[0] == "blood_drive"
+    assert catalog.program("programCREATOR")[0] == "custom_trial"
+    assert catalog.program("programCHAIN")[0] == "escalation"
+    assert catalog.program("programinvasion")[0] == "invasion"
+    assert catalog.program("programHalloween")[0] is None
+    assert catalog.program(None) == (None, None)
+
+
 def test_anything_but_the_website_shape_is_rejected():
     assert parse_catalog(None) is None
     assert parse_catalog([]) is None

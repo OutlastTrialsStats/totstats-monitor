@@ -10,11 +10,17 @@ from totstats.shared.applog import AppLog
 SITE = "https://outlasttrialsstats.com"
 
 PROGRAM_PREFIXES = (
-    ("programCore", "Core Program"),
-    ("programBloodDonations", "Blood Drive"),
-    ("programCREATOR", "Custom Trial"),
+    ("programCore", "core", "Core Program"),
+    ("programBloodDonations", "blood_drive", "Blood Drive"),
+    ("programCREATOR", "custom_trial", "Custom Trial"),
 )
-PROGRAMS = {"programchain": "Escalation", "programinvasion": "Invasion", "programcreator": "Creator"}
+KNOWN_PROGRAMS = (
+    ("programchain", "escalation", "Escalation"),
+    ("programinvasion", "invasion", "Invasion"),
+    ("programcreator", "creator", "Creator"),
+)
+PROGRAMS = {program_id: name for program_id, _, name in KNOWN_PROGRAMS}
+PROGRAM_KEYS = {program_id: key for program_id, key, _ in KNOWN_PROGRAMS}
 DIFFICULTIES = {1: "Introductory", 2: "Standard", 3: "Intensive", 4: "Psychosurgery"}
 
 
@@ -44,13 +50,17 @@ class Catalog:
             return None
         return self.trials.get(trial_id) or self.trials.get(trial_id.upper())
 
-    def program_name(self, program_id: str | None) -> str | None:
+    def program(self, program_id: str | None) -> tuple[str | None, str | None]:
         if not program_id:
-            return None
-        for prefix, name in PROGRAM_PREFIXES:
+            return None, None
+        for prefix, key, name in PROGRAM_PREFIXES:
             if program_id.startswith(prefix):
-                return name
-        return self.programs.get(program_id.lower())
+                return key, name
+        program_id = program_id.lower()
+        return PROGRAM_KEYS.get(program_id), self.programs.get(program_id)
+
+    def program_name(self, program_id: str | None) -> str | None:
+        return self.program(program_id)[1]
 
     def difficulty_name(self, level: int | None) -> str | None:
         return self.difficulties.get(level)

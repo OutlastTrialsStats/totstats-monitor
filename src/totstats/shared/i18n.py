@@ -26,6 +26,11 @@ class Translator:
         self._strings = strings
         self._fallback = fallback
 
+    def name(self, key: str, english: str | None) -> str | None:
+        if self.code == FALLBACK:
+            return english
+        return self._strings.get(key) or english
+
     def t(self, key: str, **values: object) -> str:
         text = self._strings.get(key) or self._fallback.get(key) or key
         if not values:
