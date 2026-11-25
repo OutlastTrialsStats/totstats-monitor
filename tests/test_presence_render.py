@@ -315,11 +315,11 @@ def test_german_texts():
     assert (sleeping.details, sleeping.state) == ("Schlafraum", "Untätig")
 
     chain = render(CHAIN, site(), "pid", tr=tr)
-    assert chain.state == "Escape the Courthouse • Stufe 3 • Psychosurgery"
+    assert chain.state == "Escape the Courthouse • Stufe 3 • Psychochirurgie"
     assert chain.buttons[0][0] == "Statistiken ansehen"
 
     invasion = render(INVASION, site(), tr=tr)
-    assert invasion.state == "Invasion • Reagenz • Intensive"
+    assert invasion.state == "Invasion • Reagenz • Intensiv"
     assert invasion.small_text == "Invasion — Reagenz"
 
     preparing = render(GameState(activity=Activity.PREPARING), site(), tr=tr)
@@ -327,6 +327,39 @@ def test_german_texts():
 
     templated = render(INVASION, site(), tr=tr, options=PresenceOptions(details_template="{role}"))
     assert templated.details == "Reagenz"
+
+
+def test_german_program_and_difficulty_names():
+    tr = german()
+    core = render(TRIAL, site(), tr=tr)
+    assert core.state == "Kernprogramm • Fun Park • Standard"
+
+    chain = render(CHAIN, site(), tr=tr)
+    assert chain.details == "Eskalation"
+
+    template = PresenceOptions(details_template="{program} {difficulty}")
+    assert render(CHAIN, site(), tr=tr, options=template).details == "Eskalation Psychochirurgie"
+
+
+def test_the_site_names_programs_only_it_knows():
+    catalog = parse_catalog({**RENDER_CATALOG, "programs": [{"key": "programHalloween", "name": "Spooky"}]})
+    state = GameState(activity=Activity.TRIAL, program_id="programHalloween", trial_id="FP_Trial")
+    payload = render(state, catalog, tr=german())
+    assert payload.state == "Spooky • Fun Park"
+
+
+def test_english_keeps_the_site_names():
+    catalog = parse_catalog(
+        {
+            **RENDER_CATALOG,
+            "programs": [{"key": "programchain", "name": "Chain"}],
+            "difficulties": [{"code": 4, "name": "Psycho"}],
+        }
+    )
+    payload = render(CHAIN, catalog)
+    assert payload.details == "Chain"
+    assert payload.state.endswith("Psycho")
+    assert render(CHAIN, catalog, tr=german()).details == "Eskalation"
 
 
 @pytest.mark.parametrize("template", ["{trial:>999999999}", "{trial!r}", "{trial:.3}"])

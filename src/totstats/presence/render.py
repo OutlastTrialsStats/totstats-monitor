@@ -119,8 +119,8 @@ def render(
     # Hidden elements are blanked here, once, so nothing below can leak them.
     trial = catalog.trial(state.trial_id) if state.activity in TRIAL_ACTIVITIES else None
     location = trial.location if trial is not None and options.show_location else None
-    program = catalog.program_name(state.program_id) if options.show_program else None
-    difficulty = catalog.difficulty_name(state.difficulty) if options.show_difficulty else None
+    program = _program(catalog, state.program_id, tr) if options.show_program else None
+    difficulty = _difficulty(catalog, state.difficulty, tr) if options.show_difficulty else None
     role = state.invasion_role
 
     party_id, party_size = None, None
@@ -178,6 +178,15 @@ def render(
     )
 
 
+def _program(catalog: Catalog, program_id: str | None, tr: Translator) -> str | None:
+    key, name = catalog.program(program_id)
+    return tr.name(f"presence.program.{key}", name) if key else name
+
+
+def _difficulty(catalog: Catalog, level: int | None, tr: Translator) -> str | None:
+    return tr.name(f"presence.difficulty.{level}", catalog.difficulty_name(level))
+
+
 def _trial_lines(
     state: GameState,
     trial: TrialInfo | None,
@@ -188,7 +197,7 @@ def _trial_lines(
 ) -> tuple[str, str]:
     parts = []
     if state.activity is Activity.CHAIN:
-        headline = program or tr.t("presence.escalation")
+        headline = program or tr.t("presence.program.escalation")
         if trial is not None:
             parts.append(trial.name)
         if state.chain_step:
@@ -201,7 +210,7 @@ def _trial_lines(
             parts.append(location)
 
     if state.invasion_role is not None:
-        parts = [f"{tr.t('presence.invasion')}{SEPARATOR}{role_name(state.invasion_role, tr)}"]
+        parts = [f"{tr.t('presence.program.invasion')}{SEPARATOR}{role_name(state.invasion_role, tr)}"]
     if state.activity is Activity.PREPARING:
         parts.insert(0, tr.t("presence.preparing"))
     if difficulty:

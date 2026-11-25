@@ -56,6 +56,13 @@ def test_translator_falls_back_to_english_for_missing_key() -> None:
     assert translator.t("b") == "B"
 
 
+def test_name_keeps_the_english_source_unless_this_language_translates_it() -> None:
+    translator = Translator("de", {"a": "A-de"}, {"a": "A", "b": "B"})
+    assert translator.name("a", "Site A") == "A-de"
+    assert translator.name("b", "Site B") == "Site B"
+    assert Translator("en", {"a": "A"}, {"a": "A"}).name("a", "Site A") == "Site A"
+
+
 def test_translator_returns_unknown_key_itself() -> None:
     assert Translator("de", {}, {}).t("does.not.exist") == "does.not.exist"
 
