@@ -100,7 +100,8 @@ and leaves nothing else behind.
 
 ## Languages
 
-The app comes in English, German, French and Spanish and picks your system language by default.
+The app comes in English, German, French, Spanish and Turkish and picks your system language by
+default.
 To choose another one, open **Language** in the tray menu.
 
 Translations are plain JSON files, one per language. To add or improve one for everybody, put it in

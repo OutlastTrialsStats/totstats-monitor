@@ -37,6 +37,7 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "de"; MessagesFile: "compiler:Languages\German.isl"
 Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
 Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "tr"; MessagesFile: "compiler:Languages\Turkish.isl"
 
 [CustomMessages]
 en.AutostartTask=Start %1 when I sign in to Windows
@@ -51,6 +52,9 @@ fr.LaunchNow=Démarrer %1 maintenant
 es.AutostartTask=Iniciar %1 al iniciar sesión en Windows
 es.StartupGroup=Inicio:
 es.LaunchNow=Iniciar %1 ahora
+tr.AutostartTask=Windows'ta oturum açtığımda %1 uygulamasını başlat
+tr.StartupGroup=Başlangıç:
+tr.LaunchNow=%1 uygulamasını şimdi başlat
 
 [Tasks]
 ; Ticked by default. Autostart is the user's decision, made here, and nowhere else.
