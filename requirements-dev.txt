@@ -1,6 +1,6 @@
 # Editable install of the src/ layout, so `python -m totstats` resolves from any directory.
 # It pulls in requirements.txt through pyproject.toml's dynamic dependencies.
 -e .
-ruff==0.17.5
+ruff==0.17.6
 pyinstaller==6.22.3
 pytest==9.2.0
