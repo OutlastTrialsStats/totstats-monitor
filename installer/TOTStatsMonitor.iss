@@ -75,7 +75,7 @@ Filename: "{app}\{#AppExe}"; Parameters: "--silent"; Description: "{cm:LaunchNow
   Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; settings.json, monitor.log and the cached trial list.
+; settings.json, monitor.log, the cached trial list and the preview artwork.
 Type: filesandordirs; Name: "{localappdata}\{#AppName}"
 
 [Code]

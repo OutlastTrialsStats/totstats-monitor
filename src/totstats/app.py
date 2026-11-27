@@ -25,6 +25,7 @@ from totstats.shared.log_tail import LogTailer
 from totstats.shared.profile_id import OwnProfileIdResolver
 from totstats.shared.settings import PresenceOptions, SettingsStore
 from totstats.shared.ui_queue import UiQueue
+from totstats.ui.artwork import Artwork
 from totstats.ui.console_window import ConsoleWindow
 from totstats.ui.presence_window import PresenceWindow
 
@@ -56,6 +57,7 @@ class App:
         self.locales = Locales([paths.locales_dir(), user_locales], self.log)
         self.tr = self.locales.translator(self.settings.language)
         self.ui = UiQueue(self.log)
+        self.artwork = Artwork(None if data_dir is None else data_dir / "artwork", self.log, self.ui.post)
 
         ids = OwnProfileIdResolver()
         self._game = GameProcessWatcher()

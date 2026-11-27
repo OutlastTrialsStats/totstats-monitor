@@ -7,13 +7,17 @@ from dataclasses import fields, replace
 from tkinter import ttk
 from typing import TYPE_CHECKING
 
+from PIL import Image, ImageTk
+
 from totstats import APP_NAME
-from totstats.presence.catalog import Catalog, TrialInfo, image
-from totstats.presence.render import PLACEHOLDERS, Payload, render
+from totstats.presence.catalog import Catalog, TrialInfo
+from totstats.presence.render import PLACEHOLDERS, render
 from totstats.presence.state import Activity, GameState, InvasionRole
+from totstats.shared import paths
 from totstats.shared.i18n import Translator
 from totstats.shared.settings import PresenceOptions, clean_template
-from totstats.ui import window_icon
+from totstats.ui import graphics, theme, window_icon
+from totstats.ui.discord_card import CardText, DiscordCard
 
 if TYPE_CHECKING:
     from totstats.app import App
@@ -64,10 +68,13 @@ EXAMPLES = (
     ("customize.example_sleep_room", GameState(activity=Activity.SLEEP_ROOM, party_size=2)),
 )
 
-PREVIEW_ROWS = ("details", "state", "large_text", "small_text", "timer", "button")
 PREVIEW_ELAPSED = 754
 TOGGLES = tuple(item.name for item in fields(PresenceOptions) if item.name.startswith("show_"))
 PREVIEW_PROFILE = "preview"
+# Sizes in pixels at 100 % display scale.
+LOGO = 40
+ICON = 18
+WRAP = 360
 
 
 class PresenceWindow:
@@ -80,8 +87,10 @@ class PresenceWindow:
         self._details: tk.StringVar | None = None
         self._state: tk.StringVar | None = None
         self._example: tk.StringVar | None = None
-        self._examples: dict[str, GameState] = {}
-        self._preview: dict[str, tk.StringVar] = {}
+        self._card: DiscordCard | None = None
+        self._target: ttk.Entry | None = None
+        self._images: list[ImageTk.PhotoImage] = []
+        self._logo: Image.Image | None = None
 
     def open(self) -> None:
         if self._window is not None:
@@ -96,6 +105,10 @@ class PresenceWindow:
             self._build()
         except tk.TclError:
             self.close()
+        except Exception:
+            # Never leave a half-built, hidden window behind for the next open() to show.
+            self.close()
+            raise
 
     @property
     def is_open(self) -> bool:
@@ -103,90 +116,181 @@ class PresenceWindow:
 
     def close(self) -> None:
         window, self._window = self._window, None
-        self._preview = {}
+        self._card = None
+        self._target = None
+        self._images = []
         if window is not None:
             with contextlib.suppress(tk.TclError):
                 window.destroy()
 
     def _build(self) -> None:
         tr = self._tr = self._app.tr
+        palette = theme.apply(self._root)
+        self._app.artwork.retry_failed()
         window = tk.Toplevel(self._root)
+        # Hidden while it is built, so the title bar is themed before it first appears.
+        window.withdraw()
         self._window = window
         self._details = tk.StringVar(master=window)
         self._state = tk.StringVar(master=window)
-        self._example = tk.StringVar(master=window)
+        self._example = tk.StringVar(master=window, value=EXAMPLES[0][0])
         window.title(f"{APP_NAME} - {tr.t('customize.title')}")
         window.protocol("WM_DELETE_WINDOW", self.close)
-        window.minsize(560, 0)
+        window.resizable(False, False)
         window_icon.apply(window)
 
-        body = ttk.Frame(window, padding=12)
+        outer = ttk.Frame(window)
+        outer.pack(fill=tk.BOTH, expand=True)
+        self._build_header(outer, tr)
+
+        body = ttk.Frame(outer, padding=(20, 8, 20, 16))
         body.pack(fill=tk.BOTH, expand=True)
-        body.columnconfigure(0, weight=1)
-        body.columnconfigure(1, weight=1)
-
-        show = ttk.LabelFrame(body, text=tr.t("customize.show"), padding=8)
-        show.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
-        self._toggles = {}
-        for row, name in enumerate(TOGGLES):
-            var = tk.BooleanVar(master=window)
-            self._toggles[name] = var
-            ttk.Checkbutton(show, text=tr.t(f"customize.{name}"), variable=var).grid(
-                row=row, column=0, sticky="w", pady=1
-            )
-
-        self._build_preview(body, tr)
-        self._build_texts(body, tr)
-
-        buttons = ttk.Frame(body)
-        buttons.grid(row=2, column=0, columnspan=2, sticky="e", pady=(10, 0))
-        ttk.Button(buttons, text=tr.t("customize.reset"), command=self._reset).pack(side=tk.LEFT)
-        ttk.Button(buttons, text=tr.t("customize.cancel"), command=self.close).pack(side=tk.LEFT, padx=6)
-        ttk.Button(buttons, text=tr.t("customize.save"), command=self._save).pack(side=tk.LEFT)
+        body.columnconfigure(0, weight=1, uniform="column")
+        body.columnconfigure(1, weight=1, uniform="column")
+        left = ttk.Frame(body)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        right = ttk.Frame(body)
+        right.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        self._build_toggles(left, tr, palette)
+        self._build_preview(right, tr, palette)
+        self._build_texts(right, tr, palette)
+        self._build_footer(outer, tr, palette)
 
         self._load(self._app.settings.presence)
         for var in (*self._toggles.values(), self._details, self._state, self._example):
             var.trace_add("write", self._on_change)
         self._update_preview()
         window.bind("<Escape>", lambda _event: self.close())
+        theme.title_bar(window, palette)
+        window.deiconify()
         window.focus_force()
 
-    def _build_texts(self, body: ttk.Frame, tr: Translator) -> None:
-        texts = ttk.LabelFrame(body, text=tr.t("customize.texts"), padding=8)
-        texts.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
-        texts.columnconfigure(1, weight=1)
-        for row, (key, var) in enumerate(
-            (("customize.details", self._details), ("customize.state", self._state))
-        ):
-            ttk.Label(texts, text=tr.t(key)).grid(row=row, column=0, sticky="w", padx=(0, 8), pady=2)
-            ttk.Entry(texts, textvariable=var).grid(row=row, column=1, sticky="ew", pady=2)
-        placeholders = ", ".join(f"{{{name}}}" for name in PLACEHOLDERS)
-        hint = ttk.Label(
-            texts, text=tr.t("customize.hint", placeholders=placeholders), wraplength=520, justify=tk.LEFT
+    def _px(self, value: float) -> int:
+        return round(value * self._root.winfo_fpixels("1i") / 96.0)
+
+    def _image(self, picture: Image.Image) -> ImageTk.PhotoImage:
+        photo = ImageTk.PhotoImage(picture, master=self._window)
+        self._images.append(photo)
+        return photo
+
+    def _logo_picture(self) -> Image.Image:
+        if self._logo is None:
+            try:
+                with Image.open(paths.logo_path()) as logo:
+                    self._logo = logo.convert("RGBA")
+            except OSError:
+                self._logo = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+        return self._logo
+
+    def _build_header(self, parent: ttk.Frame, tr: Translator) -> None:
+        header = ttk.Frame(parent, padding=(20, 16, 20, 0))
+        header.pack(fill=tk.X)
+        logo = self._image(graphics.fit(self._logo_picture(), self._px(LOGO)))
+        ttk.Label(header, image=logo).pack(side=tk.LEFT, padx=(0, 12))
+        titles = ttk.Frame(header)
+        titles.pack(side=tk.LEFT, fill=tk.X)
+        ttk.Label(titles, text=tr.t("customize.title"), style="Title.TLabel").pack(anchor="w")
+        ttk.Label(titles, text=tr.t("customize.subtitle"), style="Muted.TLabel").pack(anchor="w")
+
+    def _build_toggles(self, parent: ttk.Frame, tr: Translator, palette: theme.Palette) -> None:
+        ttk.Label(parent, text=tr.t("customize.show"), style="Section.TLabel").pack(anchor="w", pady=(0, 6))
+        card = ttk.Frame(parent, style="Card.TFrame", padding=(6, 4))
+        card.pack(fill=tk.X)
+        card.columnconfigure(1, weight=1)
+        self._toggles = {}
+        for index, name in enumerate(TOGGLES):
+            row = index * 2
+            if index:
+                divider = tk.Frame(card, height=1, bg=palette.line)
+                divider.grid(row=row - 1, column=0, columnspan=3, sticky="ew")
+            var = tk.BooleanVar(master=self._window)
+            self._toggles[name] = var
+            icon = self._image(graphics.icon(name, self._px(ICON), palette.muted))
+            icon_label = ttk.Label(card, image=icon, style="Card.TLabel")
+            icon_label.grid(row=row, column=0, padx=(8, 12), pady=10)
+            text = ttk.Label(card, text=tr.t(f"customize.{name}"), style="Card.TLabel")
+            text.grid(row=row, column=1, sticky="w")
+            switch = ttk.Checkbutton(card, variable=var, style="Card.Switch.TCheckbutton")
+            switch.grid(row=row, column=2, padx=(8, 4))
+            # The whole row toggles, like a Windows settings row.
+            for widget in (icon_label, text):
+                widget.bind("<Button-1>", lambda _event, flag=var: flag.set(not flag.get()))
+
+    def _build_preview(self, parent: ttk.Frame, tr: Translator, palette: theme.Palette) -> None:
+        heading = ttk.Frame(parent)
+        heading.pack(fill=tk.X, pady=(0, 6))
+        ttk.Label(heading, text=tr.t("customize.preview"), style="Section.TLabel").pack(side=tk.LEFT)
+        examples = ttk.Frame(heading)
+        examples.pack(side=tk.RIGHT)
+        for key, _sample in EXAMPLES:
+            ttk.Radiobutton(
+                examples, text=tr.t(key), value=key, variable=self._example, style="Toggle.TButton"
+            ).pack(side=tk.LEFT, padx=(2, 0))
+
+        text = CardText(
+            tr.t("customize.card_you"), tr.t("customize.card_online"), tr.t("customize.card_playing")
         )
-        hint.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self._card = DiscordCard(parent, palette, self._app.artwork, self._logo_picture(), text)
+        self._card.canvas.pack(anchor="w")
 
-    def _build_preview(self, body: ttk.Frame, tr: Translator) -> None:
-        preview = ttk.LabelFrame(body, text=tr.t("customize.preview"), padding=8)
-        preview.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
-        preview.columnconfigure(1, weight=1)
+    def _build_texts(self, parent: ttk.Frame, tr: Translator, palette: theme.Palette) -> None:
+        ttk.Label(parent, text=tr.t("customize.texts"), style="Section.TLabel").pack(anchor="w", pady=(16, 6))
+        card = ttk.Frame(parent, style="Card.TFrame", padding=(14, 10))
+        card.pack(fill=tk.X)
+        card.columnconfigure(1, weight=1)
+        entries = []
+        inputs = (("customize.details", self._details), ("customize.state", self._state))
+        for row, (key, var) in enumerate(inputs):
+            label = ttk.Label(card, text=tr.t(key), style="Card.TLabel")
+            label.grid(row=row, column=0, sticky="w", padx=(0, 10), pady=3)
+            entry = ttk.Entry(card, textvariable=var, style="Card.TEntry")
+            entry.grid(row=row, column=1, sticky="ew", pady=3)
+            entry.bind("<FocusIn>", lambda _event, target=entry: self._set_target(target))
+            entries.append(entry)
+        self._target = entries[0]
 
-        self._examples = {tr.t(key): sample for key, sample in EXAMPLES}
-        names = list(self._examples)
-        selector = ttk.Combobox(preview, textvariable=self._example, values=names, state="readonly")
-        selector.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 6))
-        self._example.set(names[0])
+        # Wrapped by hand into two rows: Tk has no flowing layout.
+        per_row = (len(PLACEHOLDERS) + 1) // 2
+        for start in range(0, len(PLACEHOLDERS), per_row):
+            chips = tk.Frame(card, bg=palette.surface)
+            gap = 6 if start else 10
+            chips.grid(row=2 + start // per_row, column=0, columnspan=2, sticky="w", pady=(gap, 0))
+            for name in PLACEHOLDERS[start:start + per_row]:
+                ttk.Button(
+                    chips, text=f"{{{name}}}", style="Placeholder.TButton", takefocus=False,
+                    command=lambda placeholder=name: self._insert(placeholder),
+                ).pack(side=tk.LEFT, padx=(0, 6))
 
-        # Laid out like the Discord card itself, so it needs no labels of its own.
-        self._preview = {}
-        for row, name in enumerate(PREVIEW_ROWS, start=1):
-            var = tk.StringVar(master=preview)
-            self._preview[name] = var
-            label = ttk.Label(preview, textvariable=var, wraplength=280, justify=tk.LEFT)
-            if name == "details":
-                with contextlib.suppress(tk.TclError):
-                    label.configure(font=("TkDefaultFont", 10, "bold"))
-            label.grid(row=row, column=0, columnspan=2, sticky="w", pady=1)
+        ttk.Label(
+            card, text=tr.t("customize.placeholders_hint"), style="Hint.Card.TLabel",
+            wraplength=self._px(WRAP), justify=tk.LEFT,
+        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(8, 0))
+
+    def _build_footer(self, parent: ttk.Frame, tr: Translator, palette: theme.Palette) -> None:
+        tk.Frame(parent, height=1, bg=palette.line).pack(fill=tk.X)
+        footer = ttk.Frame(parent, padding=(20, 12))
+        footer.pack(fill=tk.X)
+        reset = self._image(graphics.icon("reset", self._px(14), palette.muted))
+        ttk.Button(footer, text=tr.t("customize.reset"), image=reset, compound=tk.LEFT,
+                   command=self._reset).pack(side=tk.LEFT)
+        ttk.Button(footer, text=tr.t("customize.save"), style="Accent.TButton", width=12,
+                   command=self._save).pack(side=tk.RIGHT)
+        ttk.Button(footer, text=tr.t("customize.cancel"), width=12,
+                   command=self.close).pack(side=tk.RIGHT, padx=(0, 8))
+
+    def _set_target(self, entry: ttk.Entry) -> None:
+        self._target = entry
+
+    def _insert(self, name: str) -> None:
+        entry = self._target
+        if entry is None:
+            return
+        with contextlib.suppress(tk.TclError):
+            # Like typing: a selection is replaced, not pushed aside.
+            if entry.selection_present():
+                entry.delete(tk.SEL_FIRST, tk.SEL_LAST)
+            entry.insert(tk.INSERT, f"{{{name}}}")
+            entry.focus_set()
 
     def _load(self, options: PresenceOptions) -> None:
         for name, var in self._toggles.items():
@@ -208,17 +312,17 @@ class PresenceWindow:
             self.close()
 
     def _update_preview(self) -> None:
-        if self._window is None or not self._preview:
+        if self._window is None or self._card is None:
             return
-        state = self._examples.get(self._example.get(), EXAMPLES[0][1])
+        samples = dict(EXAMPLES)
+        state = samples.get(self._example.get(), EXAMPLES[0][1])
         now = time.time()
         if state.trial_started_at:
             state = replace(state, trial_started_at=now - PREVIEW_ELAPSED)
         payload = render(
             state, SAMPLE_CATALOG, PREVIEW_PROFILE, now - PREVIEW_ELAPSED, self._options(), self._tr
         )
-        for name, value in _card(payload, now).items():
-            self._preview[name].set(value)
+        self._card.show(payload, now)
 
     def _reset(self) -> None:
         self._load(PresenceOptions())
@@ -227,25 +331,3 @@ class PresenceWindow:
         options = self._options()
         self.close()
         self._app.apply_presence_options(options)
-
-
-def _card(payload: Payload | None, now: float) -> dict[str, str]:
-    lines = dict.fromkeys(PREVIEW_ROWS, "")
-    if payload is None:
-        return lines
-    state = payload.state.strip()
-    if payload.party_size:
-        state = f"{state} ({payload.party_size[0]}/{payload.party_size[1]})"
-    lines["details"] = payload.details.strip()
-    lines["state"] = state
-    # A filled square for trial artwork, an empty one for the default logo.
-    artwork = "▣" if payload.large_image != image(None) else "□"
-    lines["large_text"] = f"{artwork}  {payload.large_text}"
-    if payload.small_text:
-        lines["small_text"] = f"●  {payload.small_text}"
-    if payload.start:
-        elapsed = max(0, int(now) - payload.start)
-        lines["timer"] = f"{elapsed // 3600:02d}:{elapsed // 60 % 60:02d}:{elapsed % 60:02d}"
-    if payload.buttons:
-        lines["button"] = f"[ {payload.buttons[0][0]} ]"
-    return lines
