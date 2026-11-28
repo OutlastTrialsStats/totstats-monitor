@@ -67,3 +67,23 @@ def test_the_windows_app_theme(value, dark):
 )
 def test_the_gnome_colour_scheme(output, dark):
     assert theme.dark_from_gnome(output) is dark
+
+
+class _NoSprites:
+    """A Tk interpreter whose Sun Valley keeps no sprite images where the recolour looks."""
+
+    def __init__(self) -> None:
+        self.calls = []
+
+    def call(self, *args):
+        self.calls.append(args[:2])
+
+    def eval(self, _script):
+        raise theme.tk.TclError("no such variable")
+
+
+def test_a_recolour_that_copied_nothing_has_failed():
+    root = type("Root", (), {"tk": _NoSprites()})()
+    with pytest.raises(ValueError, match="sv_dark"):
+        theme._recolor(root, SUN_VALLEY, "dark")
+    assert root.tk.calls[-1] == ("image", "delete")
