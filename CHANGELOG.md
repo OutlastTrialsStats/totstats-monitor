@@ -1,5 +1,28 @@
 # Changelog
 
+## [3.1.0](https://github.com/OutlastTrialsStats/totstats-monitor/compare/v3.0.0...v3.1.0) (2026-11-28)
+
+
+### Features
+
+* **i18n:** add Turkish translation ([dc9cb97](https://github.com/OutlastTrialsStats/totstats-monitor/commit/dc9cb970efc9bc6b1a1b893b1fa76a379a6ec319))
+* **i18n:** add Turkish translation ([0f4c325](https://github.com/OutlastTrialsStats/totstats-monitor/commit/0f4c3251fb617e086dc6aeb695ea36162e9cf81c)), closes [#32](https://github.com/OutlastTrialsStats/totstats-monitor/issues/32)
+* **i18n:** translate program and difficulty names ([19bda59](https://github.com/OutlastTrialsStats/totstats-monitor/commit/19bda5959d35284d31a6a2818a0fc48636b50fcb))
+* **i18n:** translate program and difficulty names ([b9faab4](https://github.com/OutlastTrialsStats/totstats-monitor/commit/b9faab471d0954ca4ce10f886b62fa46e3de0661))
+* **ui:** redesign the Discord status window ([1724eb0](https://github.com/OutlastTrialsStats/totstats-monitor/commit/1724eb06dd0934baa5ee2b8efa51e22e07acd769))
+* **ui:** redesign the Discord status window ([b04cc24](https://github.com/OutlastTrialsStats/totstats-monitor/commit/b04cc2498f1a45b0e23a7118b957bc84c9f125f8))
+
+
+### Bug Fixes
+
+* **ui:** follow-ups from the review of the status window redesign ([5927b27](https://github.com/OutlastTrialsStats/totstats-monitor/commit/5927b27f95e9ce85f3d985429c70b117cdac279a))
+* **ui:** follow-ups from the review of the status window redesign ([d1f3d82](https://github.com/OutlastTrialsStats/totstats-monitor/commit/d1f3d82437384445f60744a49376078681d2ce34))
+
+
+### Dependencies
+
+* bump ruff from 0.17.5 to 0.17.6 ([6684a81](https://github.com/OutlastTrialsStats/totstats-monitor/commit/6684a81f1ca20268e3d727ecca69863ad13a7b7a))
+
 ## [3.0.0](https://github.com/OutlastTrialsStats/totstats-monitor/compare/v2.1.1...v3.0.0) (2026-11-24)
 
 
