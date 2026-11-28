@@ -57,7 +57,8 @@ class App:
         self.locales = Locales([paths.locales_dir(), user_locales], self.log)
         self.tr = self.locales.translator(self.settings.language)
         self.ui = UiQueue(self.log)
-        self.artwork = Artwork(None if data_dir is None else data_dir / "artwork", self.log, self.ui.post)
+        artwork_dir = None if data_dir is None else data_dir / "artwork"
+        self.artwork = Artwork(artwork_dir, self.log, self.ui.post, online=not args.dry_run)
 
         ids = OwnProfileIdResolver()
         self._game = GameProcessWatcher()

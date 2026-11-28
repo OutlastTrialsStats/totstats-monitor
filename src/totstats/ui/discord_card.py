@@ -44,11 +44,14 @@ def elapsed(start: int | None, now: float) -> str:
 
 
 def card_lines(payload: Payload) -> tuple[str, str]:
-    """The two text lines as Discord shows them: blanks dropped, the party size after the state."""
+    """The two text lines as Discord shows them: blanks dropped, the party size after the state.
+
+    Without a state Discord shows no party size either.
+    """
     details = payload.details.strip()
     state = payload.state.strip()
-    if payload.party_size:
-        state = f"{state} ({payload.party_size[0]}/{payload.party_size[1]})".strip()
+    if payload.party_size and state:
+        state = f"{state} ({payload.party_size[0]}/{payload.party_size[1]})"
     return details, state
 
 

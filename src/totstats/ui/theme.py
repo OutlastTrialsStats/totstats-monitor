@@ -241,14 +241,19 @@ def _recolor(root: tk.Tk, theme_dir: Path, theme: str) -> None:
     source = f"totstats_sheet_{theme}"
     root.tk.call("image", "create", "photo", source, "-format", "png",
                  "-data", base64.b64encode(buffer.getvalue()).decode("ascii"))
+    copied = 0
     try:
         for name, x, y, width, height in sprites:
             with contextlib.suppress(tk.TclError):
                 target = root.tk.eval(f"set ttk::theme::sv_{theme}::I({name})")
                 root.tk.call(target, "copy", source, "-from", x, y, x + width, y + height,
                              "-compositingrule", "set")
+                copied += 1
     finally:
         root.tk.call("image", "delete", source)
+    # Nothing copied: Sun Valley keeps its sprites somewhere else now. Not done, so tried again.
+    if not copied:
+        raise ValueError(f"no sprite of sv_{theme} recoloured")
 
 
 def title_bar(window: tk.Toplevel, palette: Palette) -> None:

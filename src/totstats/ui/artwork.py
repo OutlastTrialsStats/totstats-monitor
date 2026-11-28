@@ -17,7 +17,7 @@ from totstats.shared.api import USER_AGENT
 from totstats.shared.applog import AppLog
 
 ASSETS = f"{SITE}/game-assets/"
-NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}\.webp$")
+NAME = re.compile(r"[A-Za-z0-9_-]{1,64}\.webp")
 TIMEOUT = (5.0, 10.0)
 MAX_BYTES = 2 * 1024 * 1024
 CHUNK = 64 * 1024
@@ -32,7 +32,7 @@ def cache_name(url: str) -> str | None:
     if not url.startswith(ASSETS):
         return None
     name = url[len(ASSETS):]
-    return name if NAME.match(name) else None
+    return name if NAME.fullmatch(name) else None
 
 
 def decode(body: bytes) -> Image.Image:
@@ -68,12 +68,19 @@ class Artwork:
     """Trial artwork and role icons for the status preview, downloaded once and kept on disk.
 
     Everything but the download runs on the UI thread; the download reports back through `post`.
+    Offline, only what is already on disk is shown.
     """
 
     def __init__(
-        self, cache_dir: Path | None, log: AppLog, post: Post, clock: Callable[[], float] = time.time
+        self,
+        cache_dir: Path | None,
+        log: AppLog,
+        post: Post,
+        clock: Callable[[], float] = time.time,
+        online: bool = True,
     ) -> None:
         self._dir = cache_dir
+        self._online = online
         self._log = log
         self._post = post
         self._clock = clock
@@ -107,6 +114,8 @@ class Artwork:
             return False
 
     def _start(self, url: str, name: str, on_ready: Callable[[], None]) -> None:
+        if not self._online:
+            return
         waiting = self._pending.get(url)
         if waiting is not None:
             if on_ready not in waiting:

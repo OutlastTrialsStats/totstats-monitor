@@ -25,6 +25,7 @@ NOW = 1_800_000_000.0
         ("https://outlasttrialsstats.com/game-assets/sub/photo.webp", None),
         ("https://outlasttrialsstats.com/game-assets/photo.webp?x=1", None),
         ("https://outlasttrialsstats.com/game-assets/photo.png", None),
+        ("https://outlasttrialsstats.com/game-assets/photo.webp\n", None),
     ],
 )
 def test_only_plain_site_assets_are_fetched(url, name):
@@ -187,3 +188,17 @@ def test_a_damaged_cache_file_is_fetched_again(tmp_path, monkeypatch, inline):
 def test_anything_but_a_site_asset_is_never_requested(monkeypatch, inline):
     monkeypatch.setattr(artwork.requests, "get", lambda *_a, **_kw: pytest.fail("requested"))
     assert _store().get("https://example.com/x.webp", lambda: None) is None
+
+
+def test_offline_only_the_cache_is_shown(tmp_path, monkeypatch, inline):
+    monkeypatch.setattr(artwork.requests, "get", lambda *_a, **_kw: pytest.fail("requested"))
+    cached = tmp_path / "photo_FP_Trial.webp"
+    cached.write_bytes(_webp(4))
+    old = NOW - artwork.STALE_AFTER - 60
+    os.utime(cached, (old, old))
+    icon = "https://outlasttrialsstats.com/game-assets/icon_invader.webp"
+
+    store = Artwork(tmp_path, FakeLog(), lambda fn: fn(), clock=lambda: NOW, online=False)
+    assert store.get(ASSET, lambda: None).size == (4, 4)
+    assert store.get(icon, lambda: None) is None
+    assert store._pending == {}

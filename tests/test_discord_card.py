@@ -26,5 +26,9 @@ def test_the_party_size_follows_the_state():
     assert lines == ("Grind the Bad Apples", "Core Program • Fun Park (3/4)")
 
 
+def test_no_party_size_without_a_state():
+    assert card_lines(_payload(state="  ", party_size=(3, 4))) == ("Grind the Bad Apples", "")
+
+
 def test_padding_from_the_two_character_minimum_is_dropped():
     assert card_lines(_payload(details="  ", state="Idle")) == ("", "Idle")
